@@ -548,16 +548,14 @@ export default function DashboardPage() {
 					</label>
 				</div>
 
-				<div className="rounded-lg border border-gray-200 bg-gradient-to-b from-white to-aa-orange/5 p-4 mb-6">
-					<div className="flex flex-col gap-1 mb-3">
-						<p className="text-sm font-bold text-gray-900">Automation activation</p>
-						<p className="text-xs font-semibold text-gray-600">
-							Choose whether auto replies start on any message or only after a keyword.
-						</p>
-					</div>
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+				<div className="rounded-lg border border-gray-200 p-4 mb-4">
+					<h3 className="text-sm font-semibold text-gray-900 mb-1">Automation activation</h3>
+					<p className="text-xs text-gray-500 mb-4">
+						Choose whether auto replies start on any message or only after a keyword.
+					</p>
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div>
-							<label className="block text-sm font-semibold text-gray-800 mb-2">
+							<label className="block text-xs font-semibold text-gray-700 mb-1">
 								Activation mode
 							</label>
 							<select
@@ -569,14 +567,14 @@ export default function DashboardPage() {
 									}))
 								}
 								disabled={aiSettings.automation_enabled === false}
-								className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
+								className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
 							>
 								<option value="any">Activate on any message</option>
 								<option value="keyword">Activate only on keyword</option>
 							</select>
 						</div>
 						<div>
-							<label className="block text-sm font-semibold text-gray-800 mb-2">
+							<label className="block text-xs font-semibold text-gray-700 mb-1">
 								Activation keyword
 							</label>
 							<input
@@ -588,11 +586,11 @@ export default function DashboardPage() {
 									aiSettings.automation_enabled === false ||
 									aiSettings.automation_trigger_mode !== 'keyword'
 								}
-								placeholder='Example: START'
-								className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
+								placeholder="Example: START"
+								className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
 							/>
-							<p className="text-[11px] font-semibold text-gray-500 mt-2">
-								If keyword mode is enabled, the bot will stay silent until the user sends this keyword once.
+							<p className="text-xs text-gray-500 mt-2">
+								In keyword mode, the bot stays silent until the user sends the keyword once.
 							</p>
 						</div>
 					</div>
