@@ -194,19 +194,24 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
               href={item.path}
               onClick={mobileOpen ? onClose : undefined}
               data-testid={`sidebar-${item.name.toLowerCase()}`}
+              title={item.name}
             >
               <div
-                className={`mx-3 mb-2 flex items-center ${compact ? 'justify-center px-3' : 'gap-3 px-4'} py-3 rounded-lg cursor-pointer ${isActive
+                className={`mx-3 mb-2 rounded-lg py-3 cursor-pointer ${compact ? 'flex items-center justify-center px-3' : 'grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-3 px-4'} ${isActive
                   ? 'bg-aa-orange text-white'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'
+                  : 'text-white/80 hover:bg-white/10 hover:text-white'
                   }`}
               >
-                <FontAwesomeIcon icon={item.icon} style={{ fontSize: 20 }} />
+                <span className="flex h-[22px] w-[22px] items-center justify-center">
+                  <FontAwesomeIcon icon={item.icon} style={{ fontSize: 20 }} />
+                </span>
                 {showLabels && (
                   <>
-                    <span className="flex-1 font-medium">{item.name}</span>
+                    <span className="min-w-0 pr-1 text-[13px] font-semibold leading-snug tracking-wide whitespace-normal break-words">
+                      {item.name}
+                    </span>
                     {item.badge && (
-                      <span className="bg-white/20 text-white text-xs px-2 py-1 rounded-full">
+                      <span className="shrink-0 bg-white/20 text-white text-xs px-2 py-1 rounded-full">
                         {item.badge}
                       </span>
                     )}
