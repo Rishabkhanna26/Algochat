@@ -65,6 +65,8 @@ export default function DashboardPage() {
 		ai_prompt: '',
 		ai_blocklist: '',
 		automation_enabled: true,
+		automation_trigger_mode: 'any',
+		automation_trigger_keyword: '',
 		whatsapp_pending_recovery_enabled: true,
 		whatsapp_only_post_config_messages: true,
 		whatsapp_preconfig_message_grace_ms: 30000,
@@ -104,6 +106,8 @@ export default function DashboardPage() {
 				ai_prompt: aiData?.data?.ai_prompt || '',
 				ai_blocklist: aiData?.data?.ai_blocklist || '',
 				automation_enabled: aiData?.data?.automation_enabled !== false,
+				automation_trigger_mode: aiData?.data?.automation_trigger_mode === 'keyword' ? 'keyword' : 'any',
+				automation_trigger_keyword: aiData?.data?.automation_trigger_keyword || '',
 				whatsapp_pending_recovery_enabled:
 					aiData?.data?.whatsapp_pending_recovery_enabled !== false,
 				whatsapp_only_post_config_messages:
@@ -150,6 +154,14 @@ export default function DashboardPage() {
 	async function saveAiSettings() {
 		setAiSaving(true);
 		setAiStatus('');
+		if (
+			aiSettings.automation_trigger_mode === 'keyword' &&
+			String(aiSettings.automation_trigger_keyword || '').trim().length < 3
+		) {
+			setAiStatus('Automation keyword must be at least 3 characters.');
+			setAiSaving(false);
+			return;
+		}
 		if (aiSettings.appointment_end_hour <= aiSettings.appointment_start_hour) {
 			setAiStatus('End hour must be greater than start hour.');
 			setAiSaving(false);
@@ -206,6 +218,8 @@ export default function DashboardPage() {
 				ai_prompt: data?.data?.ai_prompt || '',
 				ai_blocklist: data?.data?.ai_blocklist || '',
 				automation_enabled: data?.data?.automation_enabled !== false,
+				automation_trigger_mode: data?.data?.automation_trigger_mode === 'keyword' ? 'keyword' : 'any',
+				automation_trigger_keyword: data?.data?.automation_trigger_keyword || '',
 				whatsapp_pending_recovery_enabled:
 					data?.data?.whatsapp_pending_recovery_enabled !== false,
 				whatsapp_only_post_config_messages:
@@ -533,6 +547,57 @@ export default function DashboardPage() {
 						Turn on auto replies
 					</label>
 				</div>
+
+				<div className="rounded-lg border border-gray-200 bg-gradient-to-b from-white to-aa-orange/5 p-4 mb-6">
+					<div className="flex flex-col gap-1 mb-3">
+						<p className="text-sm font-bold text-gray-900">Automation activation</p>
+						<p className="text-xs font-semibold text-gray-600">
+							Choose whether auto replies start on any message or only after a keyword.
+						</p>
+					</div>
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+						<div>
+							<label className="block text-sm font-semibold text-gray-800 mb-2">
+								Activation mode
+							</label>
+							<select
+								value={aiSettings.automation_trigger_mode}
+								onChange={(e) =>
+									setAiSettings((prev) => ({
+										...prev,
+										automation_trigger_mode: e.target.value === 'keyword' ? 'keyword' : 'any',
+									}))
+								}
+								disabled={aiSettings.automation_enabled === false}
+								className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
+							>
+								<option value="any">Activate on any message</option>
+								<option value="keyword">Activate only on keyword</option>
+							</select>
+						</div>
+						<div>
+							<label className="block text-sm font-semibold text-gray-800 mb-2">
+								Activation keyword
+							</label>
+							<input
+								value={aiSettings.automation_trigger_keyword}
+								onChange={(e) =>
+									setAiSettings((prev) => ({ ...prev, automation_trigger_keyword: e.target.value }))
+								}
+								disabled={
+									aiSettings.automation_enabled === false ||
+									aiSettings.automation_trigger_mode !== 'keyword'
+								}
+								placeholder='Example: START'
+								className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
+							/>
+							<p className="text-[11px] font-semibold text-gray-500 mt-2">
+								If keyword mode is enabled, the bot will stay silent until the user sends this keyword once.
+							</p>
+						</div>
+					</div>
+				</div>
+
 				<div className="flex items-center gap-3 mb-6">
 					<input
 						id="ai-enabled"

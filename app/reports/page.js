@@ -59,6 +59,9 @@ export default function ReportsPage() {
   const [reports, setReports] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState('7days');
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportingFormat, setExportingFormat] = useState('');
+  const [exportError, setExportError] = useState('');
 
   useEffect(() => {
     fetchReports();
@@ -76,6 +79,35 @@ export default function ReportsPage() {
       console.error('Error fetching reports:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const downloadReport = async (format) => {
+    const safeFormat = format === 'pdf' ? 'pdf' : 'xlsx';
+    setExportError('');
+    setExportingFormat(safeFormat);
+    setExportOpen(false);
+    try {
+      const res = await fetch(`/api/reports/export?range=${dateRange}&format=${safeFormat}`, {
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Export failed.');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `algochat-report-${dateRange}.${safeFormat}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err?.message || 'Export failed.');
+    } finally {
+      setExportingFormat('');
     }
   };
 
@@ -143,15 +175,42 @@ export default function ReportsPage() {
             size="sm"
             variant="vibrant"
           />
-          <Button
-            variant="outline"
-            icon={<FontAwesomeIcon icon={faDownload} style={{ fontSize: 18 }} />}
-            className="w-full sm:w-auto"
-          >
-            Export Report
-          </Button>
+          <div className="relative w-full sm:w-auto">
+            <Button
+              variant="primary"
+              icon={<FontAwesomeIcon icon={faDownload} style={{ fontSize: 18 }} />}
+              className="w-full sm:w-auto shadow-[0_18px_40px_rgba(255,107,0,0.18)]"
+              onClick={() => setExportOpen((v) => !v)}
+              disabled={Boolean(exportingFormat)}
+            >
+              {exportingFormat ? `Exporting ${exportingFormat.toUpperCase()}...` : 'Export'}
+            </Button>
+            {exportOpen && (
+              <div className="absolute right-0 mt-2 w-full sm:w-[220px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg z-20">
+                <button
+                  type="button"
+                  onClick={() => downloadReport('xlsx')}
+                  className="w-full px-4 py-3 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                >
+                  Export as Excel (.xlsx)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => downloadReport('pdf')}
+                  className="w-full px-4 py-3 text-left text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                >
+                  Export as PDF
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
+      {exportError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          {exportError}
+        </div>
+      ) : null}
 
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
