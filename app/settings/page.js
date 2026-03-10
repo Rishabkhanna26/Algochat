@@ -76,6 +76,7 @@ export default function SettingsPage() {
   const [whatsappPairingPhoneInput, setWhatsappPairingPhoneInput] = useState('');
   const [whatsappQrVersion, setWhatsappQrVersion] = useState(0);
   const whatsappQrJobRef = useRef(0);
+  const settingsMountedRef = useRef(true);
   const [whatsappActionStatus, setWhatsappActionStatus] = useState('');
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState('');
@@ -93,6 +94,13 @@ export default function SettingsPage() {
     businessType: 'both',
   });
   const productAccess = Boolean(user?.id) && hasProductAccess(user);
+
+  useEffect(() => {
+    settingsMountedRef.current = true;
+    return () => {
+      settingsMountedRef.current = false;
+    };
+  }, []);
 
   const updatePasswordField = (field) => (event) =>
     setPasswordForm((prev) => ({ ...prev, [field]: event.target.value }));
@@ -437,6 +445,10 @@ export default function SettingsPage() {
   const handleStartWhatsApp = async ({ usePairingCode = false } = {}) => {
     try {
       setWhatsappActionStatus('');
+      // Optimistic UI: immediately reflect that a connection attempt is in progress.
+      setWhatsappStatus('starting');
+      setWhatsappConnected(false);
+      setWhatsappCanReconnect(false);
       const pairingPhoneNumber = normalizePairingPhone(whatsappPairingPhoneInput);
       if (usePairingCode && (pairingPhoneNumber.length < 8 || pairingPhoneNumber.length > 15)) {
         throw new Error('Enter a valid phone number with country code. Use digits only.');
@@ -466,7 +478,14 @@ export default function SettingsPage() {
       if (usePairingCode) {
         updateWhatsappQr('');
       }
-      await fetchWhatsAppStatus();
+      await fetchWhatsAppStatus(settingsMountedRef);
+
+      // Some environments block/slow Socket.IO; poll briefly so QR / link-code appears quickly.
+      for (let i = 0; i < 8; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        if (!settingsMountedRef.current) break;
+        await fetchWhatsAppStatus(settingsMountedRef);
+      }
     } catch (error) {
       setWhatsappActionStatus(error.message);
     }
@@ -506,11 +525,17 @@ export default function SettingsPage() {
     whatsappStatus === 'qr' ||
     whatsappStatus === 'code';
   const showReconnectAction =
-    whatsappStatus === 'disconnected' &&
+    (whatsappStatus === 'disconnected' ||
+      whatsappStatus === 'idle' ||
+      whatsappStatus === 'error' ||
+      whatsappStatus === 'auth_failure') &&
     !whatsappConnected &&
     whatsappCanReconnect;
   const showFreshConnectActions =
-    whatsappStatus === 'disconnected' &&
+    (whatsappStatus === 'disconnected' ||
+      whatsappStatus === 'idle' ||
+      whatsappStatus === 'error' ||
+      whatsappStatus === 'auth_failure') &&
     !whatsappConnected &&
     !whatsappCanReconnect;
   const isStartBlocked =
@@ -523,6 +548,12 @@ export default function SettingsPage() {
     ? 'Connected'
     : whatsappStatus === 'connected_other'
     ? 'Connected (Another Admin)'
+    : whatsappStatus === 'auth_failure'
+    ? 'Auth Failed'
+    : whatsappStatus === 'error'
+    ? 'Error'
+    : whatsappStatus === 'idle'
+    ? 'Idle'
     : whatsappStatus === 'starting'
     ? 'Starting'
     : whatsappStatus === 'qr'
@@ -534,6 +565,12 @@ export default function SettingsPage() {
     ? 'WhatsApp is connected for this admin.'
     : whatsappStatus === 'connected_other'
     ? 'WhatsApp is connected under a different admin account.'
+    : whatsappStatus === 'auth_failure'
+    ? 'WhatsApp rejected the login attempt. Try connecting again (QR or link code).'
+    : whatsappStatus === 'error'
+    ? 'WhatsApp failed to start. Try connecting again. If it keeps failing, check Railway logs for the WhatsApp agent service.'
+    : whatsappStatus === 'idle'
+    ? 'WhatsApp is not started yet. Use QR or link code to begin.'
     : whatsappStatus === 'starting'
     ? 'Starting WhatsApp. Please wait...'
     : whatsappStatus === 'qr'
