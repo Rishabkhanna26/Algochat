@@ -567,7 +567,7 @@ export default function DashboardPage() {
 									}))
 								}
 								disabled={aiSettings.automation_enabled === false}
-								className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
+								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
 							>
 								<option value="any">Activate on any message</option>
 								<option value="keyword">Activate only on keyword</option>
@@ -587,7 +587,7 @@ export default function DashboardPage() {
 									aiSettings.automation_trigger_mode !== 'keyword'
 								}
 								placeholder="Example: START"
-								className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
+								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
 							/>
 							<p className="text-xs text-gray-500 mt-2">
 								In keyword mode, the bot stays silent until the user sends the keyword once.
