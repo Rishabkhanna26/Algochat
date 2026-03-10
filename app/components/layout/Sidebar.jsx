@@ -124,6 +124,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   const translateClass = mobileOpen ? 'translate-x-0' : '-translate-x-full';
   const showLabels = !collapsed || mobileOpen;
   const compactDesktop = collapsed && !mobileOpen;
+  const showBrandText = showLabels || compactDesktop;
 
   return (
     <aside
@@ -146,7 +147,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
         <div
           className={
             compactDesktop
-              ? 'flex flex-col items-center gap-3'
+              ? 'flex flex-col items-stretch gap-3'
               : 'flex items-center justify-between gap-3'
           }
         >
@@ -172,17 +173,27 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                 priority
               />
             </div>
-            {showLabels && (
-              <div className="min-w-0">
-                <p className="truncate text-xl font-bold leading-none tracking-tight text-white">
+            {showBrandText && !compactDesktop && (
+              <div className="min-w-0 flex-1">
+                <p className="whitespace-normal break-words text-xl font-bold leading-tight tracking-tight text-white">
                   AlgoChat
                 </p>
-                <p className="mt-1 truncate text-[11px] font-semibold tracking-wide text-white/60">
+                <p className="mt-1 whitespace-normal break-words text-[11px] font-semibold leading-tight tracking-wide text-white/60">
                   WhatsApp CRM
                 </p>
               </div>
             )}
           </div>
+          {showBrandText && compactDesktop && (
+            <div className="w-full px-1 text-center">
+              <p className="whitespace-normal break-words text-[11px] font-bold leading-tight tracking-tight text-white">
+                AlgoChat
+              </p>
+              <p className="mt-1 whitespace-normal break-words text-[10px] font-semibold leading-tight tracking-wide text-white/60">
+                WhatsApp CRM
+              </p>
+            </div>
+          )}
           <div
             className={
               compactDesktop

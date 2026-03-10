@@ -1135,12 +1135,12 @@ export default function CatalogPage() {
             <div className="lg:col-span-4 space-y-4">
               <div className="rounded-2xl border border-gray-200 p-4">
                 <p className="text-sm font-semibold text-aa-text-dark">Publishing</p>
-                <p className="text-xs text-aa-gray mt-1">Control visibility and ordering.</p>
+                <p className="text-xs text-aa-gray mt-1">Control what is visible, and in what order.</p>
 
                 <div className="mt-4 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-aa-text-dark">Active in catalog</p>
-                    <p className="text-xs text-aa-gray">Keeps the item available for admin and bot flows.</p>
+                    <p className="text-xs text-aa-gray">Turn off to hide this item everywhere.</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
@@ -1157,7 +1157,7 @@ export default function CatalogPage() {
                 <div className="mt-4 flex items-center justify-between">
                   <div>
                     <p className="text-sm font-semibold text-aa-text-dark">Show on WhatsApp</p>
-                    <p className="text-xs text-aa-gray">Controls whether this appears in WhatsApp menus.</p>
+                    <p className="text-xs text-aa-gray">Show or hide this item in WhatsApp menus.</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
@@ -1234,7 +1234,7 @@ export default function CatalogPage() {
                     <div>
                       <p className="text-sm font-semibold text-aa-text-dark">Free delivery eligible</p>
                       <p className="text-xs text-aa-gray">
-                        Include this product in the free-delivery threshold rule from Settings.
+                        Count this product for the free delivery rule (set in Settings).
                       </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
@@ -1301,7 +1301,7 @@ export default function CatalogPage() {
                     }
                   />
                   <p className="mt-2 text-xs text-aa-gray">
-                    Lower values appear first in WhatsApp. Use this when the WhatsApp order should differ from the
+                    Smaller number shows first on WhatsApp. Use this if WhatsApp order should be different from your
                     main catalog order.
                   </p>
                 </div>
