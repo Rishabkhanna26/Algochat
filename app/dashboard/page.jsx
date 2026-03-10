@@ -21,6 +21,7 @@ import { faMessage, faUsers, faCircleCheck, faCircleExclamation, faCalendarPlus,
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import Loader from '../components/common/Loader.jsx';
 import { hasAppointmentAccess, hasProductAccess } from '../../lib/business.js';
+import GeminiSelect from '../components/common/GeminiSelect.jsx';
 
 const OVERVIEW_METRICS = [
 	{ key: 'total_users', name: 'Users' },
@@ -555,23 +556,23 @@ export default function DashboardPage() {
 					</p>
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 						<div>
-							<label className="block text-xs font-semibold text-gray-700 mb-1">
-								Activation mode
-							</label>
-							<select
+							<GeminiSelect
+								label="Activation mode"
 								value={aiSettings.automation_trigger_mode}
-								onChange={(e) =>
+								onChange={(next) =>
 									setAiSettings((prev) => ({
 										...prev,
-										automation_trigger_mode: e.target.value === 'keyword' ? 'keyword' : 'any',
+										automation_trigger_mode: next === 'keyword' ? 'keyword' : 'any',
 									}))
 								}
+								options={[
+									{ value: 'any', label: 'Activate on any message' },
+									{ value: 'keyword', label: 'Activate only on keyword' },
+								]}
 								disabled={aiSettings.automation_enabled === false}
-								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
-							>
-								<option value="any">Activate on any message</option>
-								<option value="keyword">Activate only on keyword</option>
-							</select>
+								variant="warm"
+								size="sm"
+							/>
 						</div>
 						<div>
 							<label className="block text-xs font-semibold text-gray-700 mb-1">
