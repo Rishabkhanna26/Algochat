@@ -94,6 +94,30 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   ];
   const visibleItems = filterMenuItems(user?.admin_tier, menuItems);
 
+  const sectionForItem = (itemName = '') => {
+    const name = String(itemName || '').toLowerCase();
+    if (['dashboard', 'inbox', 'leads'].includes(name)) return 'core';
+    if (name.includes('product') || name.includes('service') || ['orders', 'revenue'].includes(name)) {
+      return 'commerce';
+    }
+    if (['appointments', 'booking'].includes(name)) return 'schedule';
+    return 'system';
+  };
+
+  const sectionMeta = [
+    { id: 'core', label: 'Core' },
+    { id: 'commerce', label: 'Sell' },
+    { id: 'schedule', label: 'Schedule' },
+    { id: 'system', label: 'System' },
+  ];
+
+  const grouped = sectionMeta
+    .map((section) => ({
+      ...section,
+      items: visibleItems.filter((item) => sectionForItem(item.name) === section.id),
+    }))
+    .filter((section) => section.items.length > 0);
+
   const widthClass = collapsed
     ? 'w-[85vw] max-w-[300px] lg:w-20'
     : 'w-[85vw] max-w-[320px] lg:w-64';
@@ -103,9 +127,14 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
 
   return (
     <aside
-      className={`${widthClass} ${translateClass} lg:translate-x-0 bg-aa-dark-blue h-[100dvh] max-h-[100dvh] fixed left-0 top-0 flex flex-col z-50 transition-transform duration-200 ease-out`}
+      className={`${widthClass} ${translateClass} lg:translate-x-0 bg-aa-dark-blue h-[100dvh] max-h-[100dvh] fixed left-0 top-0 flex flex-col z-50 overflow-hidden border-r border-white/10 shadow-[0_40px_120px_rgba(0,0,0,0.45)] transition-[transform,width] duration-300 ease-out`}
       data-testid="sidebar"
     >
+      <div className="pointer-events-none absolute inset-0 opacity-70">
+        <div className="absolute -top-32 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-aa-orange/20 blur-3xl" />
+        <div className="absolute bottom-0 left-0 right-0 h-48 bg-gradient-to-t from-black/25 to-transparent" />
+      </div>
+
       {/* Logo */}
       <div
         className={
@@ -144,9 +173,14 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
               />
             </div>
             {showLabels && (
-              <span className="truncate text-xl font-bold leading-none tracking-tight text-white">
-                AlgoChat
-              </span>
+              <div className="min-w-0">
+                <p className="truncate text-xl font-bold leading-none tracking-tight text-white">
+                  AlgoChat
+                </p>
+                <p className="mt-1 truncate text-[11px] font-semibold tracking-wide text-white/60">
+                  WhatsApp CRM
+                </p>
+              </div>
             )}
           </div>
           <div
@@ -183,44 +217,89 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
       </div>
 
       {/* Menu Items */}
-      <nav className="flex-1 py-6 overflow-y-auto">
-        {visibleItems.map((item) => {
-          const isActive = pathname === item.path;
-          const compact = collapsed && !mobileOpen;
-
-          return (
-            <Link
-              key={item.path}
-              href={item.path}
-              onClick={mobileOpen ? onClose : undefined}
-              data-testid={`sidebar-${item.name.toLowerCase()}`}
-              title={item.name}
-            >
-              <div
-                className={`mx-3 mb-2 rounded-lg py-3 cursor-pointer ${compact ? 'flex items-center justify-center px-3' : 'grid grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-3 px-4'} ${isActive
-                  ? 'bg-aa-orange text-white'
-                  : 'text-white/80 hover:bg-white/10 hover:text-white'
-                  }`}
-              >
-                <span className="flex h-[22px] w-[22px] items-center justify-center">
-                  <FontAwesomeIcon icon={item.icon} style={{ fontSize: 20 }} />
-                </span>
-                {showLabels && (
-                  <>
-                    <span className="min-w-0 pr-1 text-[13px] font-semibold leading-snug tracking-wide whitespace-normal break-words">
-                      {item.name}
-                    </span>
-                    {item.badge && (
-                      <span className="shrink-0 bg-white/20 text-white text-xs px-2 py-1 rounded-full">
-                        {item.badge}
-                      </span>
-                    )}
-                  </>
-                )}
+      <nav className="relative flex-1 overflow-y-auto px-3 py-5">
+        {grouped.map((section) => (
+          <div key={section.id} className="mb-6 last:mb-0">
+            {showLabels && (
+              <div className="mb-3 px-2">
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/40">
+                  {section.label}
+                </p>
               </div>
-            </Link>
-          );
-        })}
+            )}
+
+            <div className="space-y-2">
+              {section.items.map((item) => {
+                const isActive = pathname === item.path;
+                const compact = collapsed && !mobileOpen;
+
+                return (
+                  <Link
+                    key={item.path}
+                    href={item.path}
+                    onClick={mobileOpen ? onClose : undefined}
+                    data-testid={`sidebar-${item.name.toLowerCase()}`}
+                    title={item.name}
+                    className="block"
+                  >
+                    <div
+                      className={`group relative overflow-hidden rounded-2xl ${compact ? 'p-2' : 'px-3 py-2.5'} transition-colors ${
+                        isActive ? 'bg-white/10' : 'hover:bg-white/7'
+                      }`}
+                    >
+                      <div
+                        className={`absolute left-0 top-1/2 h-10 w-1 -translate-y-1/2 rounded-r-full transition-opacity ${
+                          isActive ? 'bg-aa-orange opacity-100' : 'bg-white/20 opacity-0 group-hover:opacity-70'
+                        }`}
+                      />
+                      <div
+                        className={`flex items-center ${compact ? 'justify-center' : 'gap-3'}`}
+                      >
+                        <div
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
+                            isActive
+                              ? 'border-aa-orange/40 bg-aa-orange/15 text-white'
+                              : 'border-white/10 bg-white/5 text-white/80 group-hover:text-white'
+                          } transition-colors`}
+                        >
+                          <FontAwesomeIcon icon={item.icon} style={{ fontSize: 18 }} />
+                        </div>
+
+                        {showLabels && (
+                          <div className="min-w-0 flex-1">
+                            <p
+                              className={`min-w-0 whitespace-normal break-words text-[13px] font-semibold leading-snug tracking-wide ${
+                                isActive ? 'text-white' : 'text-white/80 group-hover:text-white'
+                              }`}
+                            >
+                              {item.name}
+                            </p>
+                          </div>
+                        )}
+
+                        {showLabels && item.badge && (
+                          <div className="shrink-0">
+                            <span
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold ${
+                                isActive ? 'bg-aa-orange text-white' : 'bg-white/10 text-white/80'
+                              }`}
+                            >
+                              {item.badge}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {isActive && (
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-aa-orange/20 to-transparent" />
+                      )}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
     </aside>
   );
