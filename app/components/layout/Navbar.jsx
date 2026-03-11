@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { hasProductAccess } from '../../../lib/business.js';
 import { getBackendJwt } from '../../../lib/backend-auth.js';
+import { isRestrictedModeUser } from '../../../lib/access.js';
 
 const WHATSAPP_API_BASE =
   process.env.NEXT_PUBLIC_WHATSAPP_API_BASE || 'http://localhost:3001';
@@ -24,6 +25,7 @@ export default function Navbar({ onMenuClick }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout } = useAuth();
+  const restrictedMode = isRestrictedModeUser(user);
   const [whatsappConnected, setWhatsappConnected] = useState(false);
   const [orderNotifications, setOrderNotifications] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
@@ -84,7 +86,7 @@ export default function Navbar({ onMenuClick }) {
 
   useEffect(() => {
     let isMounted = true;
-    if (!user?.id) {
+    if (!user?.id || restrictedMode) {
       setWhatsappConnected(false);
       return () => {
         isMounted = false;
@@ -165,10 +167,10 @@ export default function Navbar({ onMenuClick }) {
       isMounted = false;
       if (socket) socket.disconnect();
     };
-  }, [user?.id]);
+  }, [user?.id, restrictedMode]);
 
   useEffect(() => {
-    if (!user?.id || !hasProductAccess(user)) {
+    if (!user?.id || restrictedMode || !hasProductAccess(user)) {
       setOrderNotifications(0);
       return;
     }
@@ -201,7 +203,7 @@ export default function Navbar({ onMenuClick }) {
       window.removeEventListener('aa-badge-refresh', handler);
       clearInterval(timer);
     };
-  }, [user?.id, user?.business_type, user?.admin_tier]);
+  }, [user?.id, user?.business_type, user?.admin_tier, restrictedMode]);
 
   return (
     <nav
@@ -245,24 +247,34 @@ export default function Navbar({ onMenuClick }) {
         {/* WhatsApp Status */}
         <div 
           className={`hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg ${
-            whatsappConnected ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+            restrictedMode
+              ? 'bg-gray-100 text-gray-500 opacity-70'
+              : whatsappConnected
+                ? 'bg-green-50 text-green-700'
+                : 'bg-red-50 text-red-700'
           }`}
           data-testid="whatsapp-status"
         >
-          {whatsappConnected ? (
+          {restrictedMode ? (
+            <FontAwesomeIcon icon={faBan} style={{ fontSize: 16 }} />
+          ) : whatsappConnected ? (
             <FontAwesomeIcon icon={faWifi} style={{ fontSize: 16 }} />
           ) : (
             <FontAwesomeIcon icon={faBan} style={{ fontSize: 16 }} />
           )}
           <span className="text-sm font-semibold">
-            {whatsappConnected ? 'Connected' : 'Disconnected'}
+            {restrictedMode ? 'Locked' : whatsappConnected ? 'Connected' : 'Disconnected'}
           </span>
         </div>
 
         {/* Notifications */}
-        <button className="relative p-2 hover:bg-gray-100 rounded-lg" data-testid="notification-btn">
+        <button
+          className={`relative p-2 rounded-lg ${restrictedMode ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100'}`}
+          data-testid="notification-btn"
+          disabled={restrictedMode}
+        >
           <FontAwesomeIcon icon={faBell} className="text-aa-gray" style={{ fontSize: 22 }} />
-          {orderNotifications > 0 && (
+          {!restrictedMode && orderNotifications > 0 && (
             <span className="absolute top-0 right-0 w-5 h-5 bg-aa-orange text-white text-xs flex items-center justify-center rounded-full">
               {orderNotifications}
             </span>

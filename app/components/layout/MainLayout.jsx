@@ -42,7 +42,7 @@ export default function MainLayout({ children }) {
       router.push('/login');
       return;
     }
-    if (!isPathAllowed(user.admin_tier, pathname)) {
+    if (!isPathAllowed(user, pathname)) {
       router.push('/dashboard');
     }
   }, [isPublic, loading, user, pathname, router]);

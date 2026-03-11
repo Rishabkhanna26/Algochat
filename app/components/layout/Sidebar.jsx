@@ -23,7 +23,7 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../auth/AuthProvider.jsx';
-import { filterMenuItems } from '../../../lib/access.js';
+import { filterMenuItems, isRestrictedModeUser } from '../../../lib/access.js';
 import {
   getCatalogLabel,
   hasAppointmentAccess,
@@ -35,14 +35,15 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   const pathname = usePathname();
   const { user } = useAuth();
   const [inboxCount, setInboxCount] = useState(0);
+  const restrictedMode = isRestrictedModeUser(user);
 
-  const showAppointments = Boolean(user?.id) && hasAppointmentAccess(user);
-  const showBooking = Boolean(user?.id) && hasBookingAccess(user);
-  const showOrders = Boolean(user?.id) && hasProductAccess(user);
+  const showAppointments = Boolean(user?.id) && (restrictedMode || hasAppointmentAccess(user));
+  const showBooking = Boolean(user?.id) && (restrictedMode || hasBookingAccess(user));
+  const showOrders = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
   const catalogLabel = getCatalogLabel(user);
 
   useEffect(() => {
-    if (!user?.id) {
+    if (!user?.id || restrictedMode) {
       setInboxCount(0);
       return;
     }
@@ -75,7 +76,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
       window.removeEventListener('aa-badge-refresh', handler);
       clearInterval(timer);
     };
-  }, [user?.id]);
+  }, [user?.id, restrictedMode]);
 
   const menuItems = [
     { name: 'Dashboard', icon: faGauge, path: '/dashboard' },
@@ -92,7 +93,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     // { name: 'Broadcast', icon: faTowerBroadcast, path: '/broadcast' },
     // { name: 'Templates', icon: faFileLines, path: '/templates' },
   ];
-  const visibleItems = filterMenuItems(user?.admin_tier, menuItems);
+  const visibleItems = filterMenuItems(user, menuItems);
 
   const sectionForItem = (itemName = '') => {
     const name = String(itemName || '').toLowerCase();
@@ -243,24 +244,40 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
               {section.items.map((item) => {
                 const isActive = pathname === item.path;
                 const compact = collapsed && !mobileOpen;
+                const isLocked = restrictedMode && item.path !== '/dashboard';
 
                 return (
                   <Link
                     key={item.path}
                     href={item.path}
-                    onClick={mobileOpen ? onClose : undefined}
+                    onClick={(event) => {
+                      if (isLocked) {
+                        event.preventDefault();
+                        return;
+                      }
+                      if (mobileOpen) onClose?.();
+                    }}
+                    aria-disabled={isLocked}
                     data-testid={`sidebar-${item.name.toLowerCase()}`}
-                    title={item.name}
+                    title={isLocked ? `${item.name} (Locked until approval)` : item.name}
                     className="block"
                   >
                     <div
                       className={`group relative overflow-hidden rounded-2xl ${compact ? 'p-2' : 'px-3 py-2.5'} transition-colors ${
-                        isActive ? 'bg-white/10' : 'hover:bg-white/7'
+                        isLocked
+                          ? 'cursor-not-allowed opacity-55'
+                          : isActive
+                            ? 'bg-white/10'
+                            : 'hover:bg-white/7'
                       }`}
                     >
                       <div
                         className={`absolute left-0 top-1/2 h-10 w-1 -translate-y-1/2 rounded-r-full transition-opacity ${
-                          isActive ? 'bg-aa-orange opacity-100' : 'bg-white/20 opacity-0 group-hover:opacity-70'
+                          isActive
+                            ? 'bg-aa-orange opacity-100'
+                            : isLocked
+                              ? 'bg-white/20 opacity-30'
+                              : 'bg-white/20 opacity-0 group-hover:opacity-70'
                         }`}
                       />
                       <div
@@ -280,7 +297,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                           <div className="min-w-0 flex-1">
                             <p
                               className={`min-w-0 whitespace-normal break-words text-[13px] font-semibold leading-snug tracking-wide ${
-                                isActive ? 'text-white' : 'text-white/80 group-hover:text-white'
+                                isActive ? 'text-white' : isLocked ? 'text-white/70' : 'text-white/80 group-hover:text-white'
                               }`}
                             >
                               {item.name}
@@ -288,7 +305,15 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                           </div>
                         )}
 
-                        {showLabels && item.badge && (
+                        {showLabels && isLocked && (
+                          <div className="shrink-0">
+                            <span className="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold bg-white/10 text-white/70">
+                              Locked
+                            </span>
+                          </div>
+                        )}
+
+                        {showLabels && item.badge && !isLocked && (
                           <div className="shrink-0">
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold ${

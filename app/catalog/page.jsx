@@ -698,8 +698,8 @@ export default function CatalogPage() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2 space-y-4">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
+        <div className="space-y-4 lg:col-span-2">
           {filteredItems.length === 0 ? (
             <Card className="p-4 sm:p-6 text-center">
               <div className="w-14 h-14 bg-aa-orange/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -842,7 +842,7 @@ export default function CatalogPage() {
           )}
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1">
           <Card className="border border-[#f1dcc5] bg-gradient-to-br from-white via-[#fff9f2] to-[#fdebd7] p-5 shadow-md">
             <h3 className="text-lg font-bold text-aa-dark-blue mb-2">WhatsApp Preview</h3>
             <p className="text-sm text-aa-dark-blue/80 mb-4">

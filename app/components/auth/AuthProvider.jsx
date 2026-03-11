@@ -43,6 +43,13 @@ export function AuthProvider({ children }) {
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      refresh();
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [refresh]);
+
   return (
     <AuthContext.Provider value={{ user, loading, refresh, logout }}>
       {children}

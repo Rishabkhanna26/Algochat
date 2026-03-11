@@ -21,6 +21,7 @@ import { faMessage, faUsers, faCircleCheck, faCircleExclamation, faCalendarPlus,
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import Loader from '../components/common/Loader.jsx';
 import { hasAppointmentAccess, hasProductAccess } from '../../lib/business.js';
+import { isRestrictedModeUser } from '../../lib/access.js';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
 
 const OVERVIEW_METRICS = [
@@ -58,6 +59,7 @@ const LEAD_STATUS_COLORS = {
 export default function DashboardPage() {
 	const router = useRouter();
 	const { user } = useAuth();
+	const restrictedMode = isRestrictedModeUser(user);
 	const [stats, setStats] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [messages, setMessages] = useState([]);
@@ -85,18 +87,27 @@ export default function DashboardPage() {
 	const [aiStatus, setAiStatus] = useState('');
 
 	useEffect(() => {
+		if (!user?.id) return;
 		fetchDashboardData();
-	}, []);
+	}, [user?.id, restrictedMode]);
 
 	async function fetchDashboardData() {
 		try {
-			const [statsRes, messagesRes, aiRes] = await Promise.all([
-				fetch('/api/dashboard/stats'),
-				fetch('/api/messages?limit=5'),
-				fetch('/api/ai-settings')
-			]);
-
+			const statsRes = await fetch('/api/dashboard/stats');
 			const statsData = await statsRes.json();
+			if (!statsRes.ok) {
+				throw new Error(statsData.error || 'Failed to fetch dashboard stats');
+			}
+			if (restrictedMode) {
+				setStats(statsData.data || null);
+				setMessages([]);
+				return;
+			}
+
+			const [messagesRes, aiRes] = await Promise.all([
+				fetch('/api/messages?limit=5'),
+				fetch('/api/ai-settings'),
+			]);
 			const messagesData = await messagesRes.json();
 			const aiData = await aiRes.json();
 
@@ -303,8 +314,8 @@ export default function DashboardPage() {
 	const totalLeadStatuses = leadStatusData.reduce((sum, item) => sum + item.value, 0);
 
 	const recentMessages = messages.slice(0, 5);
-  const showOrders = Boolean(user?.id) && hasProductAccess(user);
-  const showAppointments = Boolean(user?.id) && hasAppointmentAccess(user);
+  const showOrders = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
+  const showAppointments = Boolean(user?.id) && (restrictedMode || hasAppointmentAccess(user));
 
 	return (
 		<div className="p-4 sm:p-6 space-y-6">
@@ -313,6 +324,11 @@ export default function DashboardPage() {
 				<h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Dashboard</h1>
 				<p className="text-gray-600 mt-2">Welcome back! Here&apos;s your business overview.</p>
 			</div>
+      {restrictedMode && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Account is pending super admin confirmation. Dashboard-only access is enabled.
+        </div>
+      )}
 
 			{/* Quick Actions */}
 			<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -327,10 +343,11 @@ export default function DashboardPage() {
 						  <FontAwesomeIcon icon={faCalendarCheck} className="text-aa-orange" style={{ fontSize: 32 }} />
 					  </div>
 					  <button
+              disabled={restrictedMode}
 						  onClick={() => router.push('/appointments')}
-						  className="mt-4 w-full rounded-full border border-aa-orange text-aa-orange font-semibold px-4 py-2 hover:bg-aa-orange hover:text-white transition"
+						  className="mt-4 w-full rounded-full border border-aa-orange text-aa-orange font-semibold px-4 py-2 hover:bg-aa-orange hover:text-white transition disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-aa-orange"
 					  >
-						  Open bookings
+						  {restrictedMode ? 'Locked until approval' : 'Open bookings'}
 					  </button>
 				  </div>
         )}
@@ -346,10 +363,11 @@ export default function DashboardPage() {
 						  <FontAwesomeIcon icon={faCalendarPlus} className="text-green-500" style={{ fontSize: 32 }} />
 					  </div>
 					  <button
+              disabled={restrictedMode}
 						  onClick={() => router.push('/appointments?new=1')}
-						  className="mt-4 w-full rounded-full bg-aa-dark-blue text-white font-semibold px-4 py-2 hover:bg-aa-dark-blue/90 transition"
+						  className="mt-4 w-full rounded-full bg-aa-dark-blue text-white font-semibold px-4 py-2 hover:bg-aa-dark-blue/90 transition disabled:cursor-not-allowed disabled:opacity-50"
 					  >
-						  Create appointment
+						  {restrictedMode ? 'Locked until approval' : 'Create appointment'}
 					  </button>
 				  </div>
         )}
@@ -365,10 +383,11 @@ export default function DashboardPage() {
 						  <FontAwesomeIcon icon={faCartShopping} className="text-blue-500" style={{ fontSize: 32 }} />
 					  </div>
 					  <button
+              disabled={restrictedMode}
 						  onClick={() => router.push('/orders')}
-						  className="mt-4 w-full rounded-full border border-aa-dark-blue text-aa-dark-blue font-semibold px-4 py-2 hover:bg-aa-dark-blue hover:text-white transition"
+						  className="mt-4 w-full rounded-full border border-aa-dark-blue text-aa-dark-blue font-semibold px-4 py-2 hover:bg-aa-dark-blue hover:text-white transition disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-aa-dark-blue"
 					  >
-						  Go to orders
+						  {restrictedMode ? 'Locked until approval' : 'Go to orders'}
 					  </button>
 				  </div>
         )}
@@ -531,9 +550,18 @@ export default function DashboardPage() {
 				<p className="text-gray-600 mb-6">
 					Set what auto replies can say on WhatsApp.
 				</p>
+        {restrictedMode && (
+          <p className="text-xs text-amber-700 mb-4">
+            Preview mode: settings are visible but locked until super admin approval.
+          </p>
+        )}
 				<p className="text-xs text-gray-500 mb-6">
 					To use smart replies, add <span className="font-semibold">OPENROUTER_API_KEY</span> in server settings.
 				</p>
+        <fieldset
+          disabled={restrictedMode}
+          className={restrictedMode ? 'opacity-60' : undefined}
+        >
 				<div className="flex items-center gap-3 mb-6">
 					<input
 						id="automation-enabled"
@@ -882,6 +910,7 @@ export default function DashboardPage() {
 						</span>
 					)}
 				</div>
+        </fieldset>
 			</div>
 		</div>
 	);
