@@ -29,6 +29,7 @@ import {
 } from '../../lib/appearance.js';
 import { getBackendJwt } from '../../lib/backend-auth.js';
 import { getBusinessTypeLabel, hasProductAccess } from '../../lib/business.js';
+import { isRestrictedModeUser } from '../../lib/access.js';
 
 const WHATSAPP_API_BASE =
   process.env.NEXT_PUBLIC_WHATSAPP_API_BASE || 'http://localhost:3001';
@@ -93,7 +94,8 @@ export default function SettingsPage() {
     category: '',
     businessType: 'both',
   });
-  const productAccess = Boolean(user?.id) && hasProductAccess(user);
+  const restrictedMode = isRestrictedModeUser(user);
+  const productAccess = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
 
   useEffect(() => {
     settingsMountedRef.current = true;

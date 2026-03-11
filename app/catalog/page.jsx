@@ -27,6 +27,7 @@ import {
   hasProductAccess,
   hasServiceAccess,
 } from '../../lib/business.js';
+import { isRestrictedModeUser } from '../../lib/access.js';
 
 const DEFAULT_SERVICE_PROMPT =
   'Please share your service details (requirements and any specific concerns).';
@@ -162,8 +163,9 @@ export default function CatalogPage() {
     productLimit: '3',
   });
   const [whatsappDisplaySaving, setWhatsappDisplaySaving] = useState(false);
-  const canAddProducts = hasProductAccess(user);
-  const canAddServices = hasServiceAccess(user);
+  const restrictedMode = isRestrictedModeUser(user);
+  const canAddProducts = restrictedMode || hasProductAccess(user);
+  const canAddServices = restrictedMode || hasServiceAccess(user);
   const catalogLabel = getCatalogLabel(user);
   const isDurationEnabled =
     form.item_type === 'service' && Boolean(form.is_time_based);

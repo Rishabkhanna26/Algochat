@@ -5,7 +5,7 @@ import Sidebar from './Sidebar.jsx';
 import Navbar from './Navbar.jsx';
 import Loader from '../common/Loader.jsx';
 import { useAuth } from '../auth/AuthProvider.jsx';
-import { isPathAllowed, PUBLIC_PATHS } from '../../../lib/access.js';
+import { isPathAllowed, isRestrictedModeUser, PUBLIC_PATHS } from '../../../lib/access.js';
 import {
   applyAccentColor,
   getStoredAccentColor,
@@ -21,6 +21,7 @@ export default function MainLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, loading } = useAuth();
+  const restrictedMode = isRestrictedModeUser(user);
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -110,9 +111,27 @@ export default function MainLayout({ children }) {
         </div>
         <div className="h-16 shrink-0 sm:h-[4.5rem]" aria-hidden="true" />
         <main className="flex-1 p-3 sm:p-4 lg:p-6">
-          {children}
+          {restrictedMode && (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              View-only mode. You can browse all sections, but add/edit actions are disabled until super admin approval.
+            </div>
+          )}
+          <div className={restrictedMode ? 'aa-restricted-readonly' : ''}>
+            {children}
+          </div>
         </main>
       </div>
+      <style jsx global>{`
+        .aa-restricted-readonly button,
+        .aa-restricted-readonly input,
+        .aa-restricted-readonly select,
+        .aa-restricted-readonly textarea,
+        .aa-restricted-readonly [role='button'],
+        .aa-restricted-readonly [contenteditable='true'] {
+          pointer-events: none;
+          opacity: 0.6;
+        }
+      `}</style>
     </div>
   );
 }

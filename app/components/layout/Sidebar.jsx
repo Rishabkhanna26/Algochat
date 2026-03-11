@@ -244,29 +244,23 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
               {section.items.map((item) => {
                 const isActive = pathname === item.path;
                 const compact = collapsed && !mobileOpen;
-                const isLocked = restrictedMode && item.path !== '/dashboard';
+                const isReadOnly = restrictedMode && item.path !== '/dashboard';
 
                 return (
                   <Link
                     key={item.path}
                     href={item.path}
-                    onClick={(event) => {
-                      if (isLocked) {
-                        event.preventDefault();
-                        return;
-                      }
+                    onClick={() => {
                       if (mobileOpen) onClose?.();
                     }}
-                    aria-disabled={isLocked}
+                    aria-disabled={false}
                     data-testid={`sidebar-${item.name.toLowerCase()}`}
-                    title={isLocked ? `${item.name} (Locked until approval)` : item.name}
+                    title={isReadOnly ? `${item.name} (View only)` : item.name}
                     className="block"
                   >
                     <div
                       className={`group relative overflow-hidden rounded-2xl ${compact ? 'p-2' : 'px-3 py-2.5'} transition-colors ${
-                        isLocked
-                          ? 'cursor-not-allowed opacity-55'
-                          : isActive
+                        isActive
                             ? 'bg-white/10'
                             : 'hover:bg-white/7'
                       }`}
@@ -275,7 +269,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                         className={`absolute left-0 top-1/2 h-10 w-1 -translate-y-1/2 rounded-r-full transition-opacity ${
                           isActive
                             ? 'bg-aa-orange opacity-100'
-                            : isLocked
+                            : isReadOnly
                               ? 'bg-white/20 opacity-30'
                               : 'bg-white/20 opacity-0 group-hover:opacity-70'
                         }`}
@@ -297,7 +291,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                           <div className="min-w-0 flex-1">
                             <p
                               className={`min-w-0 whitespace-normal break-words text-[13px] font-semibold leading-snug tracking-wide ${
-                                isActive ? 'text-white' : isLocked ? 'text-white/70' : 'text-white/80 group-hover:text-white'
+                                isActive ? 'text-white' : isReadOnly ? 'text-white/70' : 'text-white/80 group-hover:text-white'
                               }`}
                             >
                               {item.name}
@@ -305,15 +299,15 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                           </div>
                         )}
 
-                        {showLabels && isLocked && (
+                        {showLabels && isReadOnly && (
                           <div className="shrink-0">
                             <span className="inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold bg-white/10 text-white/70">
-                              Locked
+                              View only
                             </span>
                           </div>
                         )}
 
-                        {showLabels && item.badge && !isLocked && (
+                        {showLabels && item.badge && !isReadOnly && (
                           <div className="shrink-0">
                             <span
                               className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold ${

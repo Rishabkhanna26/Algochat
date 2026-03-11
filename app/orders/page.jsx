@@ -25,6 +25,7 @@ import Loader from '../components/common/Loader.jsx';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import { getBusinessTypeLabel, hasProductAccess } from '../../lib/business.js';
+import { isRestrictedModeUser } from '../../lib/access.js';
 
 const STATUS_VARIANTS = {
   new: 'blue',
@@ -250,7 +251,8 @@ export default function OrdersPage() {
   const [deletingOrderId, setDeletingOrderId] = useState(null);
   const ordersRefreshInFlightRef = useRef(false);
 
-  const hasOrderAccess = Boolean(user?.id) && hasProductAccess(user);
+  const restrictedMode = isRestrictedModeUser(user);
+  const hasOrderAccess = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
 
   const syncOrdersState = (nextOrders) => {
     setOrders(nextOrders);

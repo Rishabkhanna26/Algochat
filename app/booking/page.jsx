@@ -26,6 +26,7 @@ import Input from '../components/common/Input.jsx';
 import Loader from '../components/common/Loader.jsx';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
 import { hasBookingAccess } from '../../lib/business.js';
+import { isRestrictedModeUser } from '../../lib/access.js';
 import {
   BOOKING_CATEGORY_PRESETS,
   getBookingCategoryPreset,
@@ -149,8 +150,9 @@ export default function BookingPage() {
   const [form, setForm] = useState(buildEmptyForm());
   const [customCategoryInput, setCustomCategoryInput] = useState('');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const restrictedMode = isRestrictedModeUser(user);
 
-  const bookingAccess = Boolean(user?.id) && hasBookingAccess(user);
+  const bookingAccess = Boolean(user?.id) && (restrictedMode || hasBookingAccess(user));
 
   const fetchItems = async ({ bustCache = false } = {}) => {
     setLoading(true);

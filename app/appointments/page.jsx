@@ -35,6 +35,7 @@ import {
   hasBookingAccess,
   hasServiceAccess,
 } from '../../lib/business.js';
+import { isRestrictedModeUser } from '../../lib/access.js';
 
 export default function AppointmentsPage() {
   const router = useRouter();
@@ -83,10 +84,11 @@ export default function AppointmentsPage() {
     payment_services: [],
   });
   const appointmentsRefreshInFlightRef = useRef(false);
+  const restrictedMode = isRestrictedModeUser(user);
 
-  const hasAppointmentsAccess = Boolean(user?.id) && hasAppointmentAccess(user);
-  const canUseServiceAppointments = Boolean(user?.id) && hasServiceAccess(user);
-  const canUseBookingAppointments = Boolean(user?.id) && hasBookingAccess(user);
+  const hasAppointmentsAccess = Boolean(user?.id) && (restrictedMode || hasAppointmentAccess(user));
+  const canUseServiceAppointments = Boolean(user?.id) && (restrictedMode || hasServiceAccess(user));
+  const canUseBookingAppointments = Boolean(user?.id) && (restrictedMode || hasBookingAccess(user));
   const label = useMemo(() => 'Appointments', []);
   const labelLower = label.toLowerCase();
   const contactOptions = useMemo(

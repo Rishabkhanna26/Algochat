@@ -24,6 +24,7 @@ import {
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import Loader from '../components/common/Loader.jsx';
 import { hasProductAccess } from '../../lib/business.js';
+import { isRestrictedModeUser } from '../../lib/access.js';
 
 const toAmount = (value) => {
   const num = Number(value);
@@ -74,8 +75,9 @@ export default function RevenuePage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const restrictedMode = isRestrictedModeUser(user);
 
-  const hasRevenueAccess = Boolean(user?.id) && hasProductAccess(user);
+  const hasRevenueAccess = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
 
   useEffect(() => {
     if (!hasRevenueAccess) {
