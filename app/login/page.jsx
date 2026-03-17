@@ -178,7 +178,7 @@ export default function LoginPage() {
 
   return (
     <div className="aa-auth-page relative min-h-screen overflow-hidden bg-[#f3f6fb]">
-      <div className="pointer-events-none absolute inset-0">
+      <div className="aa-auth-bg pointer-events-none absolute inset-0">
         <div className="absolute -left-36 -top-40 h-[580px] w-[580px] rounded-full bg-blue-200/20 blur-3xl" />
         <div className="absolute -bottom-44 -right-36 h-[640px] w-[640px] rounded-full bg-orange-200/20 blur-3xl" />
         <div
@@ -234,7 +234,7 @@ export default function LoginPage() {
         </aside>
 
         <section className="relative flex flex-1 items-center justify-center px-5 py-8 sm:px-8 lg:w-1/2 lg:flex-none lg:px-12">
-          <div className="pointer-events-none absolute inset-0">
+          <div className="aa-auth-decor pointer-events-none absolute inset-0">
             <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'linear-gradient(rgb(148 163 184 / 0.35) 1px, transparent 1px), linear-gradient(90deg, rgb(148 163 184 / 0.35) 1px, transparent 1px)', backgroundSize: '56px 56px' }} />
             <div className="absolute right-16 top-20 h-16 w-16 rounded-2xl border border-aa-orange/20 bg-white/40 backdrop-blur-md aa-auth-float" />
             <div className="absolute bottom-24 left-10 h-12 w-12 rounded-full border border-aa-dark-blue/20 bg-white/35 backdrop-blur-md aa-auth-float aa-auth-float-delay" />
@@ -265,7 +265,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="rounded-3xl border border-white/80 bg-white/90 p-7 shadow-[0_30px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-8 aa-auth-card-reveal">
+            <div className="aa-auth-card rounded-3xl border border-white/80 bg-white/90 p-7 shadow-[0_30px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-8 aa-auth-card-reveal">
               <h1 className="mb-2 text-3xl font-black text-slate-900 aa-auth-reveal-up" style={{ animationDelay: '120ms' }}>Sign in</h1>
               <p className="mb-6 text-sm text-slate-500 aa-auth-reveal-up" style={{ animationDelay: '180ms' }}>Log in to continue managing your workspace.</p>
 
