@@ -7,6 +7,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faGauge,
   faInbox,
+  faComments,
   faUsers,
   faTowerBroadcast,
   faFileLines,
@@ -35,6 +36,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   const pathname = usePathname();
   const { user } = useAuth();
   const [inboxCount, setInboxCount] = useState(0);
+  const [websiteChatCount, setWebsiteChatCount] = useState(0);
   const restrictedMode = isRestrictedModeUser(user);
 
   const showAppointments = Boolean(user?.id) && (restrictedMode || hasAppointmentAccess(user));
@@ -45,32 +47,45 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   useEffect(() => {
     if (!user?.id || restrictedMode) {
       setInboxCount(0);
+      setWebsiteChatCount(0);
       return;
     }
     let mounted = true;
     const inboxKey = `aa_inbox_last_seen_${user.id}`;
 
-    const fetchInboxCount = async () => {
+    const fetchCounts = async () => {
       try {
         const since =
           typeof window !== 'undefined' && localStorage.getItem(inboxKey)
             ? localStorage.getItem(inboxKey)
             : '1970-01-01T00:00:00.000Z';
-        const response = await fetch(`/api/users/count?since=${encodeURIComponent(since)}`, {
-          credentials: 'include',
-        });
-        const data = await response.json();
+        const [inboxResponse, websiteChatResponse] = await Promise.all([
+          fetch(`/api/users/count?since=${encodeURIComponent(since)}`, {
+            credentials: 'include',
+          }),
+          fetch('/api/website-chat/count', {
+            credentials: 'include',
+          }),
+        ]);
+        const [inboxData, websiteChatData] = await Promise.all([
+          inboxResponse.json(),
+          websiteChatResponse.json(),
+        ]);
         if (!mounted) return;
-        setInboxCount(Math.max(0, Number(data?.count || 0)));
+        setInboxCount(Math.max(0, Number(inboxData?.count || 0)));
+        setWebsiteChatCount(Math.max(0, Number(websiteChatData?.count || 0)));
       } catch (error) {
-        if (mounted) setInboxCount(0);
+        if (mounted) {
+          setInboxCount(0);
+          setWebsiteChatCount(0);
+        }
       }
     };
 
-    fetchInboxCount();
-    const handler = () => fetchInboxCount();
+    fetchCounts();
+    const handler = () => fetchCounts();
     window.addEventListener('aa-badge-refresh', handler);
-    const timer = setInterval(fetchInboxCount, 30000);
+    const timer = setInterval(fetchCounts, 30000);
     return () => {
       mounted = false;
       window.removeEventListener('aa-badge-refresh', handler);
@@ -81,6 +96,12 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   const menuItems = [
     { name: 'Dashboard', icon: faGauge, path: '/dashboard' },
     { name: 'Inbox', icon: faInbox, path: '/inbox', badge: inboxCount > 0 ? String(inboxCount) : null },
+    {
+      name: 'Website Chatbot',
+      icon: faComments,
+      path: '/website-chat',
+      badge: websiteChatCount > 0 ? String(websiteChatCount) : null,
+    },
     { name: 'Leads', icon: faUsers, path: '/contacts' },
     { name: catalogLabel, icon: faBoxOpen, path: '/catalog' },
     ...(showOrders ? [{ name: 'Orders', icon: faCartShopping, path: '/orders' }] : []),
@@ -97,7 +118,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
 
   const sectionForItem = (itemName = '') => {
     const name = String(itemName || '').toLowerCase();
-    if (['dashboard', 'inbox', 'leads'].includes(name)) return 'core';
+    if (['dashboard', 'inbox', 'website chatbot', 'leads'].includes(name)) return 'core';
     if (name.includes('product') || name.includes('service') || ['orders', 'revenue'].includes(name)) {
       return 'commerce';
     }

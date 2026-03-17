@@ -1215,7 +1215,7 @@ export default function SettingsPage() {
                       {showReconnectAction ? (
                         <Button
                           variant="primary"
-                          onClick={() => handleStartWhatsApp({ usePairingCode: false })}
+                          onClick={() => handleStartWhatsApp({ usePairingCode: true })}
                           disabled={isStartBlocked}
                           className="w-full sm:w-auto"
                         >
@@ -1225,21 +1225,21 @@ export default function SettingsPage() {
                       {showFreshConnectActions ? (
                         <Button
                           variant="primary"
-                          onClick={() => handleStartWhatsApp({ usePairingCode: false })}
+                          onClick={() => handleStartWhatsApp({ usePairingCode: true })}
                           disabled={isStartBlocked}
                           className="w-full sm:w-auto"
                         >
-                          {whatsappStatus === 'starting' ? 'Starting...' : 'Connect with QR'}
+                          {whatsappStatus === 'starting' ? 'Starting...' : 'Get Link Code'}
                         </Button>
                       ) : null}
                       {showFreshConnectActions ? (
                         <Button
                           variant="outline"
-                          onClick={() => handleStartWhatsApp({ usePairingCode: true })}
+                          onClick={() => handleStartWhatsApp({ usePairingCode: false })}
                           disabled={isStartBlocked}
                           className="w-full sm:w-auto"
                         >
-                          Get Link Code
+                          Connect with QR
                         </Button>
                       ) : null}
                       {showDisconnectAction ? (
