@@ -12,10 +12,12 @@ import Loader from '../components/common/Loader.jsx';
 import Modal from '../components/common/Modal.jsx';
 import Input from '../components/common/Input.jsx';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
+import { useToast } from '../components/common/ToastProvider.jsx';
 
 export default function AdminsPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { pushToast } = useToast();
   const [admins, setAdmins] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -39,6 +41,16 @@ export default function AdminsPage() {
     access_duration_unit: 'days',
     access_expires_at: null,
   });
+
+  useEffect(() => {
+    if (!error) return;
+    pushToast({ type: 'error', title: 'Not saved', message: error });
+  }, [error, pushToast]);
+
+  useEffect(() => {
+    if (!editError) return;
+    pushToast({ type: 'error', title: 'Not saved', message: editError });
+  }, [editError, pushToast]);
 
   useEffect(() => {
     if (!authLoading && user && user.admin_tier !== 'super_admin') {
@@ -138,6 +150,7 @@ export default function AdminsPage() {
         throw result.error || new Error('Failed to update admin');
       }
       setEditOpen(false);
+      pushToast({ type: 'success', title: 'Saved', message: 'Admin updated.' });
     } catch (err) {
       setEditError(err.message || 'Failed to update admin');
     } finally {
@@ -155,7 +168,9 @@ export default function AdminsPage() {
     );
     if (!result.ok) {
       setEditError(result.error?.message || 'Failed to update admin');
+      return;
     }
+    pushToast({ type: 'success', title: 'Saved', message: 'Admin status updated.' });
   };
 
   const deleteAdmin = async (admin) => {
@@ -177,6 +192,7 @@ export default function AdminsPage() {
         throw new Error(data.error || 'Failed to delete admin');
       }
       setAdmins((prev) => prev.filter((item) => item.id !== admin.id));
+      pushToast({ type: 'success', title: 'Deleted', message: 'Admin removed.' });
     } catch (err) {
       setError(err.message || 'Failed to delete admin');
     } finally {
@@ -276,16 +292,18 @@ export default function AdminsPage() {
           </Card>
         ) : (
           filteredAdmins.map((admin) => (
-            <Card key={admin.id} data-testid={`admin-card-${admin.id}`}>
+            <Card key={admin.id} data-testid={`admin-card-${admin.id}`} className="h-full overflow-hidden">
               <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   <div className="w-16 h-16 rounded-full bg-aa-dark-blue flex items-center justify-center">
                     <span className="text-white font-bold text-xl">
                       {admin.name?.charAt(0) || 'A'}
                     </span>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-aa-dark-blue">{admin.name || 'Unnamed'}</h3>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-aa-dark-blue break-words">
+                      {admin.name || 'Unnamed'}
+                    </h3>
                     <Badge variant={roleColors[admin.admin_tier] || 'default'}>
                       {admin.admin_tier === 'super_admin' ? 'Super Admin' : 'Admin'}
                     </Badge>
@@ -294,9 +312,9 @@ export default function AdminsPage() {
               </div>
 
               <div className="space-y-2 mb-4">
-                <div className="text-sm text-aa-gray">{admin.email || '—'}</div>
-                <div className="text-sm text-aa-gray">{admin.phone || '—'}</div>
-                <div className="text-sm text-aa-gray">
+                <div className="text-sm text-aa-gray break-all">{admin.email || '—'}</div>
+                <div className="text-sm text-aa-gray break-all">{admin.phone || '—'}</div>
+                <div className="text-sm text-aa-gray break-words">
                   Business: {admin.business_category || 'General'} ({admin.business_type || 'both'})
                 </div>
                 <div className="flex flex-wrap gap-2">

@@ -25,6 +25,7 @@ import Modal from '../components/common/Modal.jsx';
 import Input from '../components/common/Input.jsx';
 import Loader from '../components/common/Loader.jsx';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
+import { useToast } from '../components/common/ToastProvider.jsx';
 import { hasBookingAccess } from '../../lib/business.js';
 import { isRestrictedModeUser } from '../../lib/access.js';
 import {
@@ -135,6 +136,7 @@ const formatDurationLabel = (item) => {
 export default function BookingPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { pushToast } = useToast();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -153,6 +155,16 @@ export default function BookingPage() {
   const restrictedMode = isRestrictedModeUser(user);
 
   const bookingAccess = Boolean(user?.id) && (restrictedMode || hasBookingAccess(user));
+
+  useEffect(() => {
+    if (!notice) return;
+    pushToast({ type: 'success', title: 'Saved', message: notice });
+  }, [notice, pushToast]);
+
+  useEffect(() => {
+    if (!error) return;
+    pushToast({ type: 'error', title: 'Not saved', message: error });
+  }, [error, pushToast]);
 
   const fetchItems = async ({ bustCache = false } = {}) => {
     setLoading(true);

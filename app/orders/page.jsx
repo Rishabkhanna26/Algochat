@@ -23,6 +23,7 @@ import Modal from '../components/common/Modal.jsx';
 import Input from '../components/common/Input.jsx';
 import Loader from '../components/common/Loader.jsx';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
+import { useToast } from '../components/common/ToastProvider.jsx';
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import { getBusinessTypeLabel, hasProductAccess } from '../../lib/business.js';
 import { isRestrictedModeUser } from '../../lib/access.js';
@@ -228,6 +229,7 @@ const getPaymentLinkId = (order) => String(order?.payment_link_id || '').trim();
 export default function OrdersPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
+  const { pushToast } = useToast();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -253,6 +255,11 @@ export default function OrdersPage() {
 
   const restrictedMode = isRestrictedModeUser(user);
   const hasOrderAccess = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
+
+  useEffect(() => {
+    if (!syncWarning) return;
+    pushToast({ type: 'error', title: 'Not saved', message: syncWarning });
+  }, [syncWarning, pushToast]);
 
   const syncOrdersState = (nextOrders) => {
     setOrders(nextOrders);
@@ -496,6 +503,7 @@ export default function OrdersPage() {
         applyOrderUpdate(orderId, data.data);
       }
       setSyncWarning('');
+      pushToast({ type: 'success', title: 'Saved', message: 'Order updated.' });
     } catch (err) {
       restoreOrderSnapshot(orderId, previousSnapshot);
       setSyncWarning(err.message || 'Could not reach server. Changes are only on this screen right now.');
@@ -527,6 +535,7 @@ export default function OrdersPage() {
         throw new Error(payload?.error || 'Unable to delete order.');
       }
       removeOrderFromState(order.id);
+      pushToast({ type: 'success', title: 'Deleted', message: 'Order removed.' });
     } catch (err) {
       setSyncWarning(err.message || 'Unable to delete order.');
     } finally {
@@ -1328,7 +1337,16 @@ export default function OrdersPage() {
                       max="10080"
                       step="1"
                       value={paymentLinkTimerMinutes}
-                      onChange={(event) => setPaymentLinkTimerMinutes(event.target.value)}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        if (nextValue === '') {
+                          setPaymentLinkTimerMinutes('');
+                          return;
+                        }
+                        const next = Number(nextValue);
+                        if (!Number.isFinite(next) || next < 0) return;
+                        setPaymentLinkTimerMinutes(nextValue);
+                      }}
                       placeholder="Timer (mins)"
                       className="rounded-lg border border-gray-200 px-3 py-2 text-sm"
                     />

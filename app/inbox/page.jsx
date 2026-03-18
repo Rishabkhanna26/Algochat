@@ -22,6 +22,7 @@ import Card from '../components/common/Card.jsx';
 import Button from '../components/common/Button.jsx';
 import Badge from '../components/common/Badge.jsx';
 import Loader from '../components/common/Loader.jsx';
+import { useToast } from '../components/common/ToastProvider.jsx';
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import { getBackendJwt } from '../../lib/backend-auth.js';
 
@@ -131,6 +132,7 @@ const mergeById = (existing, incoming) => {
 
 export default function InboxPage() {
   const { user } = useAuth();
+  const { pushToast } = useToast();
   const threadViewportRef = useRef(null);
   const shouldScrollThreadToBottomRef = useRef(false);
   const pendingThreadScrollRestoreRef = useRef(null);
@@ -158,6 +160,11 @@ export default function InboxPage() {
   const [whatsappStatus, setWhatsappStatus] = useState('idle');
   const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [mobileQuickRepliesOpen, setMobileQuickRepliesOpen] = useState(false);
+
+  useEffect(() => {
+    if (!sendError) return;
+    pushToast({ type: 'error', title: 'Not sent', message: sendError });
+  }, [sendError, pushToast]);
 
   const statusFilterOptions = [
     { value: 'all', label: 'All', icon: faFilter },
@@ -659,6 +666,9 @@ export default function InboxPage() {
       },
     ];
   }, [activeUpcomingAppointment]);
+  const shouldShowAppointmentActions = Boolean(
+    activeUpcomingAppointment || activeAppointments.length > 0 || hasAppointmentChangeFlag
+  );
   const activeFilterBadges = [
     search.trim() ? `Search: ${search.trim()}` : null,
     filters.status !== 'all'
@@ -1326,123 +1336,125 @@ export default function InboxPage() {
             </Card>
           </div>
 
-          <Card
-            unstyled
-            className="mt-4 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:mt-5 sm:p-4 lg:mt-6 lg:p-5"
-          >
-            <div className="flex flex-col gap-2 border-b border-gray-200 pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:pb-4">
-              <div>
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-900 sm:gap-2 sm:text-sm">
-                  <FontAwesomeIcon icon={faClock} className="text-blue-600" />
-                  Appointment Actions
+          {shouldShowAppointmentActions && (
+            <Card
+              unstyled
+              className="mt-4 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:mt-5 sm:p-4 lg:mt-6 lg:p-5"
+            >
+              <div className="flex flex-col gap-2 border-b border-gray-200 pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3 sm:pb-4">
+                <div>
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-900 sm:gap-2 sm:text-sm">
+                    <FontAwesomeIcon icon={faClock} className="text-blue-600" />
+                    Appointment Actions
+                  </div>
+                  <p className="mt-1 text-[10px] text-gray-600 sm:text-xs lg:max-w-3xl">
+                    Handle date or time change requests from the selected chat in a separate workspace.
+                  </p>
                 </div>
-                <p className="mt-1 text-[10px] text-gray-600 sm:text-xs lg:max-w-3xl">
-                  Handle date or time change requests from the selected chat in a separate workspace.
-                </p>
+                {activeThreadMeta && (
+                  <div className="inline-flex rounded-full border border-gray-300 bg-gray-50 px-2.5 py-1 text-[10px] font-semibold text-gray-700 sm:px-3 sm:py-1.5 sm:text-xs">
+                    {activeThreadMeta.user_name || 'Selected chat'}
+                  </div>
+                )}
               </div>
-              {activeThreadMeta && (
-                <div className="inline-flex rounded-full border border-gray-300 bg-gray-50 px-2.5 py-1 text-[10px] font-semibold text-gray-700 sm:px-3 sm:py-1.5 sm:text-xs">
-                  {activeThreadMeta.user_name || 'Selected chat'}
+
+              {!selectedThread ? (
+                <div className="py-8 text-center text-xs text-gray-600 sm:py-10 sm:text-sm">
+                  Select a conversation to view appointment actions.
+                </div>
+              ) : activeAppointmentData?.loading ? (
+                <div className="flex min-h-[12rem] items-center justify-center">
+                  <Loader size="sm" text="Loading appointments..." />
+                </div>
+              ) : activeAppointmentData?.error ? (
+                <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 sm:mt-5 sm:px-4 sm:py-3 sm:text-sm">
+                  {activeAppointmentData.error}
+                </div>
+              ) : (
+                <div className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 sm:text-xs">
+                      Current Appointment
+                    </p>
+                    {activeUpcomingAppointment ? (
+                      <div className="mt-2 space-y-1.5 text-xs text-gray-900 sm:mt-3 sm:space-y-2 sm:text-sm">
+                        <p className="font-semibold">
+                          {activeUpcomingAppointment.appointment_type || getAppointmentKindLabel(activeUpcomingAppointment)}
+                        </p>
+                        <p>{formatDateTime(activeUpcomingAppointment.start_time)}</p>
+                        <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                          <Badge variant={getAppointmentKind(activeUpcomingAppointment) === 'booking' ? 'yellow' : 'blue'}>
+                            {getAppointmentKindLabel(activeUpcomingAppointment)}
+                          </Badge>
+                          <Badge variant="blue">
+                            {activeUpcomingAppointment.status || 'booked'}
+                          </Badge>
+                          {activeUpcomingAppointment.payment_status && (
+                            <Badge variant="green">
+                              {activeUpcomingAppointment.payment_status}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[10px] text-gray-600 sm:mt-3 sm:text-xs">
+                        No appointment record was found for this contact yet.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 shadow-sm sm:px-4 sm:py-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 sm:text-xs">
+                      Send a Fast Reply
+                    </p>
+                    <div className="mt-2 grid gap-1.5 sm:mt-3 sm:gap-2">
+                      {appointmentReplyActions.map((action) => (
+                        <button
+                          key={action.label}
+                          type="button"
+                          onClick={() => applyDraftTemplate(action.text)}
+                          className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-[10px] font-semibold text-gray-900 transition hover:border-blue-500 hover:bg-blue-50 sm:px-4 sm:py-2.5 sm:text-xs"
+                        >
+                          {action.label}
+                        </button>
+                      ))}
+                    </div>
+                    <a
+                      href="/appointments"
+                      className="mt-2 inline-flex items-center text-[10px] font-semibold text-blue-600 hover:text-blue-700 sm:mt-3 sm:text-xs"
+                    >
+                      Open appointments
+                    </a>
+                  </div>
+
+                  <div className="space-y-3 sm:space-y-4 lg:col-span-2 xl:col-span-1">
+                    {hasAppointmentChangeFlag && (
+                      <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 sm:px-4 sm:py-3 sm:text-sm">
+                        <p className="font-semibold">Customer asked to change the appointment.</p>
+                        <p className="mt-1 text-[10px] text-amber-800 sm:text-xs">
+                          Latest incoming message looks like a date/time change request.
+                        </p>
+                      </div>
+                    )}
+
+                    {latestIncomingMessage && (
+                      <div className={`${hasAppointmentChangeFlag ? 'block' : 'hidden lg:block'} rounded-xl border border-gray-200 bg-white px-3 py-3 shadow-sm sm:px-4 sm:py-4`}>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 sm:text-xs">
+                          Latest Incoming
+                        </p>
+                        <p className="mt-2 text-xs text-gray-900 sm:mt-3 sm:text-sm">
+                          {latestIncomingMessage.message_text}
+                        </p>
+                        <p className="mt-1.5 text-[10px] text-gray-500 sm:mt-2 sm:text-xs">
+                          {formatDateTime(latestIncomingMessage.created_at)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
-            </div>
-
-            {!selectedThread ? (
-              <div className="py-8 text-center text-xs text-gray-600 sm:py-10 sm:text-sm">
-                Select a conversation to view appointment actions.
-              </div>
-            ) : activeAppointmentData?.loading ? (
-              <div className="flex min-h-[12rem] items-center justify-center">
-                <Loader size="sm" text="Loading appointments..." />
-              </div>
-            ) : activeAppointmentData?.error ? (
-              <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700 sm:mt-5 sm:px-4 sm:py-3 sm:text-sm">
-                {activeAppointmentData.error}
-              </div>
-            ) : (
-              <div className="mt-4 grid gap-3 sm:mt-5 sm:gap-4 lg:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 shadow-sm sm:px-4 sm:py-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 sm:text-xs">
-                    Current Appointment
-                  </p>
-                  {activeUpcomingAppointment ? (
-                    <div className="mt-2 space-y-1.5 text-xs text-gray-900 sm:mt-3 sm:space-y-2 sm:text-sm">
-                      <p className="font-semibold">
-                        {activeUpcomingAppointment.appointment_type || getAppointmentKindLabel(activeUpcomingAppointment)}
-                      </p>
-                      <p>{formatDateTime(activeUpcomingAppointment.start_time)}</p>
-                      <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                        <Badge variant={getAppointmentKind(activeUpcomingAppointment) === 'booking' ? 'yellow' : 'blue'}>
-                          {getAppointmentKindLabel(activeUpcomingAppointment)}
-                        </Badge>
-                        <Badge variant="blue">
-                          {activeUpcomingAppointment.status || 'booked'}
-                        </Badge>
-                        {activeUpcomingAppointment.payment_status && (
-                          <Badge variant="green">
-                            {activeUpcomingAppointment.payment_status}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="mt-2 text-[10px] text-gray-600 sm:mt-3 sm:text-xs">
-                      No appointment record was found for this contact yet.
-                    </p>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3 shadow-sm sm:px-4 sm:py-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 sm:text-xs">
-                    Send a Fast Reply
-                  </p>
-                  <div className="mt-2 grid gap-1.5 sm:mt-3 sm:gap-2">
-                    {appointmentReplyActions.map((action) => (
-                      <button
-                        key={action.label}
-                        type="button"
-                        onClick={() => applyDraftTemplate(action.text)}
-                        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-[10px] font-semibold text-gray-900 transition hover:border-blue-500 hover:bg-blue-50 sm:px-4 sm:py-2.5 sm:text-xs"
-                      >
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
-                  <a
-                    href="/appointments"
-                    className="mt-2 inline-flex items-center text-[10px] font-semibold text-blue-600 hover:text-blue-700 sm:mt-3 sm:text-xs"
-                  >
-                    Open appointments
-                  </a>
-                </div>
-
-                <div className="space-y-3 sm:space-y-4 lg:col-span-2 xl:col-span-1">
-                  {hasAppointmentChangeFlag && (
-                    <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 sm:px-4 sm:py-3 sm:text-sm">
-                      <p className="font-semibold">Customer asked to change the appointment.</p>
-                      <p className="mt-1 text-[10px] text-amber-800 sm:text-xs">
-                        Latest incoming message looks like a date/time change request.
-                      </p>
-                    </div>
-                  )}
-
-                  {latestIncomingMessage && (
-                    <div className={`${hasAppointmentChangeFlag ? 'block' : 'hidden lg:block'} rounded-xl border border-gray-200 bg-white px-3 py-3 shadow-sm sm:px-4 sm:py-4`}>
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 sm:text-xs">
-                        Latest Incoming
-                      </p>
-                      <p className="mt-2 text-xs text-gray-900 sm:mt-3 sm:text-sm">
-                        {latestIncomingMessage.message_text}
-                      </p>
-                      <p className="mt-1.5 text-[10px] text-gray-500 sm:mt-2 sm:text-xs">
-                        {formatDateTime(latestIncomingMessage.created_at)}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </Card>
+            </Card>
+          )}
         </div>
       </div>
     </div>

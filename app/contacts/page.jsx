@@ -5,8 +5,10 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUsers, faMagnifyingGlass, faPhone, faEnvelope } from '@fortawesome/free-solid-svg-icons';
 import Loader from '../components/common/Loader.jsx';
 import Modal from '../components/common/Modal.jsx';
+import { useToast } from '../components/common/ToastProvider.jsx';
 
 export default function ContactsPage() {
+  const { pushToast } = useToast();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -29,6 +31,11 @@ export default function ContactsPage() {
   const [chatSending, setChatSending] = useState(false);
   const [chatSendError, setChatSendError] = useState('');
   const [automationUpdatingId, setAutomationUpdatingId] = useState(null);
+
+  useEffect(() => {
+    if (!chatSendError) return;
+    pushToast({ type: 'error', title: 'Not sent', message: chatSendError });
+  }, [chatSendError, pushToast]);
 
   useEffect(() => {
     const handle = setTimeout(() => {
@@ -222,8 +229,17 @@ export default function ContactsPage() {
       setUsers((prev) => prev.map((item) => (item.id === user.id ? { ...item, ...updated } : item)));
       setSelectedUser((prev) => (prev?.id === user.id ? { ...prev, ...updated } : prev));
       setChatUser((prev) => (prev?.id === user.id ? { ...prev, ...updated } : prev));
+      pushToast({
+        type: 'success',
+        title: 'Saved',
+        message: nextValue ? 'Auto-reply disabled for this contact.' : 'Auto-reply enabled for this contact.',
+      });
     } catch (error) {
-      window.alert(error.message || 'Could not update auto-reply setting.');
+      pushToast({
+        type: 'error',
+        title: 'Not saved',
+        message: error.message || 'Could not update auto-reply setting.',
+      });
     } finally {
       setAutomationUpdatingId(null);
     }

@@ -7,6 +7,7 @@ import Modal from '../components/common/Modal.jsx';
 import Input from '../components/common/Input.jsx';
 import Loader from '../components/common/Loader.jsx';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
+import { useToast } from '../components/common/ToastProvider.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faPaperPlane,
@@ -18,6 +19,7 @@ import {
 } from '@fortawesome/free-solid-svg-icons';
 
 export default function BroadcastPage() {
+  const { pushToast } = useToast();
   const [broadcasts, setBroadcasts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -107,8 +109,14 @@ export default function BroadcastPage() {
       setShowCreateModal(false);
       setNewBroadcast({ title: '', message: '', target_audience: 'all', scheduled_at: '' });
       fetchBroadcasts({ reset: true, nextOffset: 0 });
+      pushToast({ type: 'success', title: 'Saved', message: 'Broadcast scheduled.' });
     } catch (error) {
       console.error('Error creating broadcast:', error);
+      pushToast({
+        type: 'error',
+        title: 'Not saved',
+        message: error.message || 'Failed to create broadcast.',
+      });
     }
   };
 

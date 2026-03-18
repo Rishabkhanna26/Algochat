@@ -11,8 +11,27 @@ export default function Input({
   rightElement,
   ...props 
 }) {
+  const { min: minProp, ...rest } = props;
   const hasLeftIcon = Boolean(icon);
   const hasRightElement = Boolean(rightElement);
+  const isNumber = type === 'number';
+  const handleChange = (event) => {
+    if (isNumber) {
+      const nextValue = event.target.value;
+      if (nextValue === '') {
+        onChange?.(event);
+        return;
+      }
+      if (!/^\d+$/.test(nextValue)) {
+        return;
+      }
+      const numericValue = Number(nextValue);
+      if (!Number.isFinite(numericValue) || numericValue < 0) {
+        return;
+      }
+    }
+    onChange?.(event);
+  };
   return (
     <div className={`w-full ${className}`}>
       {label && (
@@ -29,13 +48,14 @@ export default function Input({
         <input
           type={type}
           value={value}
-          onChange={onChange}
+          onChange={handleChange}
           placeholder={placeholder}
+          min={isNumber ? (minProp ?? 0) : minProp}
           className={`w-full rounded-lg border-2 bg-white px-4 py-2.5 text-sm text-aa-text-dark outline-none placeholder:text-gray-400 focus:border-aa-orange sm:py-3 sm:text-base ${
             error ? 'border-red-500' : 'border-gray-200'
           } ${hasLeftIcon ? 'pl-10' : ''} ${hasRightElement ? 'pr-12' : ''}`}
           data-testid="input-field"
-          {...props}
+          {...rest}
         />
         {hasRightElement && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2">

@@ -18,6 +18,7 @@ import {
   faBoxOpen,
   faCartShopping,
   faWallet,
+  faCreditCard,
   faChevronLeft,
   faChevronRight,
   faXmark,
@@ -37,9 +38,9 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   const [inboxCount, setInboxCount] = useState(0);
   const restrictedMode = isRestrictedModeUser(user);
 
-  const showAppointments = Boolean(user?.id) && (restrictedMode || hasAppointmentAccess(user));
-  const showBooking = Boolean(user?.id) && (restrictedMode || hasBookingAccess(user));
-  const showOrders = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
+  const showAppointments = Boolean(user?.id) && hasAppointmentAccess(user);
+  const showBooking = Boolean(user?.id) && hasBookingAccess(user);
+  const showOrders = Boolean(user?.id) && hasProductAccess(user);
   const catalogLabel = getCatalogLabel(user);
 
   useEffect(() => {
@@ -88,6 +89,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     ...(showAppointments ? [{ name: 'Appointments', icon: faCalendarCheck, path: '/appointments' }] : []),
     ...(showBooking ? [{ name: 'Booking', icon: faHotel, path: '/booking' }] : []),
     { name: 'Reports', icon: faChartBar, path: '/reports' },
+    { name: 'Billing', icon: faCreditCard, path: '/billing' },
     { name: 'Admins', icon: faUserGroup, path: '/admins', roles: ['super_admin'] },
     { name: 'Settings', icon: faGear, path: '/settings' },
     // { name: 'Broadcast', icon: faTowerBroadcast, path: '/broadcast' },
@@ -125,7 +127,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   const translateClass = mobileOpen ? 'translate-x-0' : '-translate-x-full';
   const showLabels = !collapsed || mobileOpen;
   const compactDesktop = collapsed && !mobileOpen;
-  const showBrandText = showLabels || compactDesktop;
+  const showBrandText = showLabels;
 
   return (
     <aside
@@ -141,27 +143,27 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
       <div
         className={
           compactDesktop
-            ? 'border-b border-white/10 px-2 py-4'
-            : 'border-b border-white/10 px-4 py-4 sm:px-6 sm:py-6'
+            ? 'border-b border-white/10 px-3 py-4'
+            : 'border-b border-white/10 px-4 py-5 sm:px-6 sm:py-6'
         }
       >
         <div
           className={
             compactDesktop
-              ? 'flex flex-col items-stretch gap-3'
-              : 'flex items-center justify-between gap-3'
+              ? 'flex flex-col items-center gap-3'
+              : 'flex items-center justify-between gap-4'
           }
         >
           <div
             className={
               compactDesktop
                 ? 'flex w-full items-center justify-center'
-                : 'flex min-w-0 flex-1 items-center gap-3'
+                : 'flex min-w-0 flex-1 items-center gap-4'
             }
           >
             <div
-              className={`flex shrink-0 items-center justify-center overflow-hidden border border-white/15 bg-white/10 ${
-                compactDesktop ? 'h-14 w-14 rounded-xl p-1.5' : 'h-16 w-16 rounded-2xl p-2'
+              className={`flex shrink-0 items-center justify-center overflow-hidden border border-white/20 bg-gradient-to-br from-white/15 via-white/10 to-white/5 shadow-[0_12px_30px_rgba(0,0,0,0.25)] ${
+                compactDesktop ? 'h-12 w-12 rounded-2xl p-2' : 'h-14 w-14 rounded-[20px] p-2'
               }`}
             >
               <Image
@@ -176,25 +178,15 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
             </div>
             {showBrandText && !compactDesktop && (
               <div className="min-w-0 flex-1">
-                <p className="whitespace-normal break-words text-xl font-bold leading-tight tracking-tight text-white">
+                <p className="w-full whitespace-nowrap text-[22px] font-semibold leading-tight tracking-tight text-white">
                   AlgoChat
                 </p>
-                <p className="mt-1 whitespace-normal break-words text-[11px] font-semibold leading-tight tracking-wide text-white/60">
+                <p className="mt-1 w-full whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.28em] text-white/70">
                   WhatsApp CRM
                 </p>
               </div>
             )}
           </div>
-          {showBrandText && compactDesktop && (
-            <div className="w-full px-1 text-center">
-              <p className="whitespace-normal break-words text-[11px] font-bold leading-tight tracking-tight text-white">
-                AlgoChat
-              </p>
-              <p className="mt-1 whitespace-normal break-words text-[10px] font-semibold leading-tight tracking-wide text-white/60">
-                WhatsApp CRM
-              </p>
-            </div>
-          )}
           <div
             className={
               compactDesktop

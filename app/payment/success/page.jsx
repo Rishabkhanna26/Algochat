@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 const normalizeValue = (value) => {
   if (Array.isArray(value)) return String(value[0] || "").trim();
   return String(value || "").trim();
@@ -37,43 +39,43 @@ const STATUS_CONFIG = {
     title: "Payment Successful",
     accent: "text-green-700",
     panel: "bg-green-50 border-green-200",
-    detail: "Your payment was received successfully.",
+    detail: "Thanks! Your WhatsApp payment was received successfully.",
   },
   partially_paid: {
     title: "Partial Payment Received",
     accent: "text-blue-700",
     panel: "bg-blue-50 border-blue-200",
-    detail: "We received a partial payment. Remaining amount can be paid later.",
+    detail: "We received a partial WhatsApp payment. The remaining amount can be paid later.",
   },
   cancelled: {
     title: "Payment Cancelled",
     accent: "text-amber-700",
     panel: "bg-amber-50 border-amber-200",
-    detail: "The payment link was cancelled before completion.",
+    detail: "The WhatsApp payment link was cancelled before completion.",
   },
   failed: {
     title: "Payment Failed",
     accent: "text-red-700",
     panel: "bg-red-50 border-red-200",
-    detail: "The transaction did not complete. Please try again.",
+    detail: "The WhatsApp transaction did not complete. Please try again.",
   },
   created: {
     title: "Payment Pending",
     accent: "text-gray-700",
     panel: "bg-gray-50 border-gray-200",
-    detail: "Payment link is active, but payment is not completed yet.",
+    detail: "Your WhatsApp payment link is active, but payment is not completed yet.",
   },
   expired: {
     title: "Payment Link Expired",
     accent: "text-amber-700",
     panel: "bg-amber-50 border-amber-200",
-    detail: "This payment link has expired.",
+    detail: "Your WhatsApp payment link has expired.",
   },
   unknown: {
     title: "Payment Status Updated",
     accent: "text-gray-700",
     panel: "bg-gray-50 border-gray-200",
-    detail: "We received a callback, but status was not recognized.",
+    detail: "We received a WhatsApp payment update, but status was not recognized.",
   },
 };
 
@@ -82,6 +84,12 @@ export default async function PaymentSuccessPage({ searchParams }) {
   const linkId = normalizeValue(searchParams?.razorpay_payment_link_id);
   const referenceId = normalizeValue(searchParams?.razorpay_payment_link_reference_id);
   const callbackStatus = normalizeStatus(searchParams?.razorpay_payment_link_status);
+  const isAdminPayment = referenceId.startsWith("admin_");
+
+  if (isAdminPayment) {
+    const statusParam = callbackStatus || "paid";
+    redirect(`/billing/thank-you?status=${encodeURIComponent(statusParam)}`);
+  }
 
   const effectiveStatus = normalizeStatus(callbackStatus);
   const config = STATUS_CONFIG[effectiveStatus] || STATUS_CONFIG.unknown;
@@ -132,8 +140,8 @@ export default async function PaymentSuccessPage({ searchParams }) {
               <span className="font-semibold text-gray-900">Reference ID:</span> {referenceId}
             </p>
           ) : null}
-          <p className="text-xs text-amber-700">
-            Detailed Razorpay verification now belongs in the backend service.
+          <p className="text-xs text-gray-500">
+            You can safely close this page and continue your WhatsApp conversation.
           </p>
         </div>
 
@@ -147,7 +155,7 @@ export default async function PaymentSuccessPage({ searchParams }) {
             Back to WhatsApp
           </a>
           <p className="text-sm text-gray-600 self-center">
-            If this page shows payment details, your team can verify quickly.
+            This page is for WhatsApp payments only.
           </p>
         </div>
       </div>

@@ -28,6 +28,7 @@ import Input from '../components/common/Input.jsx';
 import Button from '../components/common/Button.jsx';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
 import Loader from '../components/common/Loader.jsx';
+import { useToast } from '../components/common/ToastProvider.jsx';
 import {
   getAppointmentCapabilityLabel,
   getBusinessTypeLabel,
@@ -41,6 +42,7 @@ export default function AppointmentsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const { pushToast } = useToast();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -83,6 +85,16 @@ export default function AppointmentsPage() {
     payment_notes: '',
     payment_services: [],
   });
+
+  useEffect(() => {
+    if (!editError) return;
+    pushToast({ type: 'error', title: 'Not saved', message: editError });
+  }, [editError, pushToast]);
+
+  useEffect(() => {
+    if (!catalogError) return;
+    pushToast({ type: 'error', title: 'Not saved', message: catalogError });
+  }, [catalogError, pushToast]);
   const appointmentsRefreshInFlightRef = useRef(false);
   const restrictedMode = isRestrictedModeUser(user);
 
@@ -343,9 +355,15 @@ export default function AppointmentsPage() {
       setAppointments((prev) =>
         prev.map((appt) => (appt.id === appointmentId ? data.data : appt))
       );
+      pushToast({ type: 'success', title: 'Saved', message: 'Appointment updated.' });
     } catch (error) {
       console.error('Failed to update appointment:', error);
       setAppointments(previous);
+      pushToast({
+        type: 'error',
+        title: 'Not saved',
+        message: error.message || 'Failed to update appointment.',
+      });
     } finally {
       setUpdatingId(null);
     }
@@ -721,6 +739,11 @@ export default function AppointmentsPage() {
         setAppointments((prev) => prev.map((appt) => (appt.id === editForm.id ? data.data : appt)));
       }
       setEditOpen(false);
+      pushToast({
+        type: 'success',
+        title: 'Saved',
+        message: editMode === 'create' ? 'Appointment created.' : 'Appointment updated.',
+      });
     } catch (error) {
       setEditError(error.message || 'Failed to save appointment');
     } finally {

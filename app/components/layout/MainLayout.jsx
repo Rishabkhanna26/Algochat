@@ -4,8 +4,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import Sidebar from './Sidebar.jsx';
 import Navbar from './Navbar.jsx';
 import Loader from '../common/Loader.jsx';
+import { ToastProvider } from '../common/ToastProvider.jsx';
 import { useAuth } from '../auth/AuthProvider.jsx';
 import { isPathAllowed, isRestrictedModeUser, PUBLIC_PATHS } from '../../../lib/access.js';
+import Button from '../common/Button.jsx';
 import {
   applyAccentColor,
   getStoredAccentColor,
@@ -22,6 +24,10 @@ export default function MainLayout({ children }) {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { user, loading } = useAuth();
   const restrictedMode = isRestrictedModeUser(user);
+  const isBillingPath = pathname.startsWith('/billing');
+  const isSubscriptionRestricted =
+    user?.dashboard_charge_enabled &&
+    user?.dashboard_subscription_active === false;
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -90,48 +96,66 @@ export default function MainLayout({ children }) {
   const navbarDesktopOffset = sidebarCollapsed ? 'lg:left-20' : 'lg:left-64';
 
   return (
-    <div className="min-h-screen bg-aa-light-bg overflow-x-hidden">
-      <Sidebar
-        collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
-        mobileOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-      />
-      {sidebarOpen && (
-        <button
-          type="button"
-          aria-label="Close sidebar"
-          onClick={() => setSidebarOpen(false)}
-          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+    <ToastProvider>
+      <div className="min-h-screen bg-aa-light-bg overflow-x-hidden">
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+          mobileOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
         />
-      )}
-      <div className={`flex min-h-screen flex-col ${desktopOffset}`}>
-        <div className={`fixed inset-x-0 top-0 z-40 ${navbarDesktopOffset}`}>
-          <Navbar onMenuClick={() => setSidebarOpen(true)} />
-        </div>
-        <div className="h-16 shrink-0 sm:h-[4.5rem]" aria-hidden="true" />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6">
-          {restrictedMode && (
-            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              View-only mode. You can browse all sections, but add/edit actions are disabled until super admin approval.
-            </div>
-          )}
-          <div className={restrictedMode ? 'aa-restricted-readonly' : ''}>
-            {children}
+        {sidebarOpen && (
+          <button
+            type="button"
+            aria-label="Close sidebar"
+            onClick={() => setSidebarOpen(false)}
+            className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+          />
+        )}
+        <div className={`flex min-h-screen flex-col ${desktopOffset}`}>
+          <div className={`fixed inset-x-0 top-0 z-40 ${navbarDesktopOffset}`}>
+            <Navbar onMenuClick={() => setSidebarOpen(true)} />
           </div>
-        </main>
+          <div className="h-16 shrink-0 sm:h-[4.5rem]" aria-hidden="true" />
+          <main className="flex-1 p-3 sm:p-4 lg:p-6">
+            {restrictedMode && (
+              <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="font-semibold">
+                    {isSubscriptionRestricted
+                      ? 'Dashboard subscription expired.'
+                      : 'Account is in restricted mode.'}
+                  </p>
+                  <p className="text-xs text-amber-700">
+                    {isSubscriptionRestricted
+                      ? 'Renew your dashboard plan to resume full access.'
+                      : 'You can browse, but add/edit actions are disabled until access is restored.'}
+                  </p>
+                </div>
+                {!isBillingPath && (
+                  <Button variant="primary" onClick={() => router.push('/billing')}>
+                    Go to Billing
+                  </Button>
+                )}
+              </div>
+            )}
+            <div className={restrictedMode && !isBillingPath ? 'aa-restricted-readonly' : ''}>
+              {children}
+            </div>
+          </main>
+        </div>
+        <style jsx global>{`
+          .aa-restricted-readonly button,
+          .aa-restricted-readonly input,
+          .aa-restricted-readonly select,
+          .aa-restricted-readonly textarea,
+          .aa-restricted-readonly [role='button'],
+          .aa-restricted-readonly [contenteditable='true'] {
+            pointer-events: none;
+            opacity: 0.6;
+          }
+        `}</style>
       </div>
-      <style jsx global>{`
-        .aa-restricted-readonly button,
-        .aa-restricted-readonly input,
-        .aa-restricted-readonly select,
-        .aa-restricted-readonly textarea,
-        .aa-restricted-readonly [role='button'],
-        .aa-restricted-readonly [contenteditable='true'] {
-          pointer-events: none;
-          opacity: 0.6;
-        }
-      `}</style>
-    </div>
+    </ToastProvider>
   );
 }

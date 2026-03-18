@@ -135,6 +135,8 @@ export default function RevenuePage() {
   const whatsappRevenueOutstanding = toAmount(
     stats?.whatsapp_revenue_outstanding ?? analysis?.outstanding_total
   );
+  const aiSpendInr = toAmount(stats?.ai_spend_inr || 0);
+  const netRevenue = toAmount(whatsappRevenueEarned - aiSpendInr);
 
   if (!hasRevenueAccess) {
     return (
@@ -188,7 +190,7 @@ export default function RevenuePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <div className="revenue-summary-card revenue-summary-card--earned rounded-lg border p-4 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <p className="revenue-summary-label text-xs font-semibold uppercase tracking-wide">Earned (Collected)</p>
@@ -220,6 +222,24 @@ export default function RevenuePage() {
           <p className="revenue-summary-label text-xs font-semibold uppercase tracking-wide">Top Revenue Day</p>
           <p className="revenue-summary-value mt-1 text-2xl font-bold">{formatCurrency(revenueTopDayValue)}</p>
           <p className="revenue-summary-copy mt-1 text-xs">{revenueTopDayLabel}</p>
+        </div>
+
+        <div className="revenue-summary-card revenue-summary-card--ai rounded-lg border p-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="revenue-summary-label text-xs font-semibold uppercase tracking-wide">AI Spend</p>
+            <FontAwesomeIcon icon={faArrowTrendDown} className="revenue-summary-icon" />
+          </div>
+          <p className="revenue-summary-value text-2xl font-bold">{formatCurrency(aiSpendInr)}</p>
+          <p className="revenue-summary-copy mt-1 text-xs">Pay-as-you-go AI usage</p>
+        </div>
+
+        <div className="revenue-summary-card revenue-summary-card--net rounded-lg border p-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="revenue-summary-label text-xs font-semibold uppercase tracking-wide">Net Revenue</p>
+            <FontAwesomeIcon icon={faMoneyBillTrendUp} className="revenue-summary-icon" />
+          </div>
+          <p className="revenue-summary-value text-2xl font-bold">{formatCurrency(netRevenue)}</p>
+          <p className="revenue-summary-copy mt-1 text-xs">Collected minus AI spend</p>
         </div>
       </div>
 

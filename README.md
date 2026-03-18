@@ -17,6 +17,6 @@ Copy `.env.local.example` to `.env.local` and set:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:5000/api
-NEXT_PUBLIC_WHATSAPP_API_BASE=http://localhost:5001
-NEXT_PUBLIC_WHATSAPP_SOCKET_URL=http://localhost:5001
+NEXT_PUBLIC_WHATSAPP_API_BASE=http://localhost:4000
+NEXT_PUBLIC_WHATSAPP_SOCKET_URL=http://localhost:4000
 ```

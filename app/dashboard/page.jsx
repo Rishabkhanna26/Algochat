@@ -23,6 +23,7 @@ import Loader from '../components/common/Loader.jsx';
 import { hasAppointmentAccess, hasProductAccess } from '../../lib/business.js';
 import { isRestrictedModeUser } from '../../lib/access.js';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
+import { useToast } from '../components/common/ToastProvider.jsx';
 
 const OVERVIEW_METRICS = [
 	{ key: 'total_users', name: 'Users' },
@@ -59,6 +60,7 @@ const LEAD_STATUS_COLORS = {
 export default function DashboardPage() {
 	const router = useRouter();
 	const { user } = useAuth();
+	const { pushToast } = useToast();
 	const restrictedMode = isRestrictedModeUser(user);
 	const [stats, setStats] = useState(null);
 	const [loading, setLoading] = useState(true);
@@ -85,11 +87,46 @@ export default function DashboardPage() {
 	});
 	const [aiSaving, setAiSaving] = useState(false);
 	const [aiStatus, setAiStatus] = useState('');
+	const [billingSummary, setBillingSummary] = useState(null);
+	const [billingLoading, setBillingLoading] = useState(false);
 
 	useEffect(() => {
 		if (!user?.id) return;
 		fetchDashboardData();
 	}, [user?.id, restrictedMode]);
+
+	useEffect(() => {
+		if (!aiStatus) return;
+		const lower = aiStatus.toLowerCase();
+		const type = lower.includes('failed') || lower.includes('error') ? 'error' : 'success';
+		pushToast({ type, title: type === 'error' ? 'Not saved' : 'Saved', message: aiStatus });
+	}, [aiStatus, pushToast]);
+
+	useEffect(() => {
+		if (!user?.id) return;
+		let active = true;
+		const fetchBillingSummary = async () => {
+			setBillingLoading(true);
+			try {
+				const response = await fetch('/api/payments/summary', { credentials: 'include' });
+				const data = await response.json();
+				if (!response.ok) {
+					throw new Error(data?.error || 'Failed to load billing summary');
+				}
+				if (active) {
+					setBillingSummary(data?.data || null);
+				}
+			} catch (error) {
+				if (active) setBillingSummary(null);
+			} finally {
+				if (active) setBillingLoading(false);
+			}
+		};
+		fetchBillingSummary();
+		return () => {
+			active = false;
+		};
+	}, [user?.id]);
 
 	async function fetchDashboardData() {
 		try {
@@ -436,6 +473,36 @@ export default function DashboardPage() {
 				</div>
 			</div>
 
+			{/* Token Snapshot */}
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+				<div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
+					<h3 className="text-lg font-bold text-gray-900">Token Snapshot</h3>
+					<p className="text-sm text-gray-600 mt-1">
+						Free tokens refresh monthly. Prepaid tokens never expire.
+					</p>
+					{billingLoading ? (
+						<p className="text-sm text-gray-500 mt-3">Loading token balances...</p>
+					) : billingSummary ? (
+						<div className="mt-3 space-y-2 text-sm text-gray-700">
+							<p>
+								Free input: <span className="font-semibold">{billingSummary.balances?.free_input_tokens || 0}</span>
+							</p>
+							<p>
+								Free output: <span className="font-semibold">{billingSummary.balances?.free_output_tokens || 0}</span>
+							</p>
+							<p>
+								Prepaid input: <span className="font-semibold">{billingSummary.balances?.paid_input_tokens || 0}</span>
+							</p>
+							<p>
+								Prepaid output: <span className="font-semibold">{billingSummary.balances?.paid_output_tokens || 0}</span>
+							</p>
+						</div>
+					) : (
+						<p className="text-sm text-gray-500 mt-3">Token data not available.</p>
+					)}
+				</div>
+			</div>
+
 			{/* Charts Row */}
 				<div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
 					<div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
@@ -686,7 +753,7 @@ export default function DashboardPage() {
 								value={aiSettings.appointment_start_hour}
 								onChange={(e) => {
 									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next)) return;
+									if (!Number.isFinite(next) || next < 0) return;
 									setAiSettings((prev) => ({ ...prev, appointment_start_hour: next }));
 								}}
 								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
@@ -703,7 +770,7 @@ export default function DashboardPage() {
 								value={aiSettings.appointment_end_hour}
 								onChange={(e) => {
 									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next)) return;
+									if (!Number.isFinite(next) || next < 0) return;
 									setAiSettings((prev) => ({ ...prev, appointment_end_hour: next }));
 								}}
 								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
@@ -721,7 +788,7 @@ export default function DashboardPage() {
 								value={aiSettings.appointment_slot_minutes}
 								onChange={(e) => {
 									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next)) return;
+									if (!Number.isFinite(next) || next < 0) return;
 									setAiSettings((prev) => ({ ...prev, appointment_slot_minutes: next }));
 								}}
 								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
@@ -738,7 +805,7 @@ export default function DashboardPage() {
 								value={aiSettings.appointment_window_months}
 								onChange={(e) => {
 									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next)) return;
+									if (!Number.isFinite(next) || next < 0) return;
 									setAiSettings((prev) => ({ ...prev, appointment_window_months: next }));
 								}}
 								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
@@ -808,7 +875,7 @@ export default function DashboardPage() {
 								value={aiSettings.whatsapp_preconfig_message_grace_ms}
 								onChange={(e) => {
 									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next)) return;
+									if (!Number.isFinite(next) || next < 0) return;
 									setAiSettings((prev) => ({
 										...prev,
 										whatsapp_preconfig_message_grace_ms: next,
@@ -828,7 +895,7 @@ export default function DashboardPage() {
 								value={aiSettings.whatsapp_recovery_window_hours}
 								onChange={(e) => {
 									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next)) return;
+									if (!Number.isFinite(next) || next < 0) return;
 									setAiSettings((prev) => ({
 										...prev,
 										whatsapp_recovery_window_hours: next,
@@ -848,7 +915,7 @@ export default function DashboardPage() {
 								value={aiSettings.whatsapp_recovery_batch_limit}
 								onChange={(e) => {
 									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next)) return;
+									if (!Number.isFinite(next) || next < 0) return;
 									setAiSettings((prev) => ({
 										...prev,
 										whatsapp_recovery_batch_limit: next,
@@ -868,7 +935,7 @@ export default function DashboardPage() {
 								value={aiSettings.whatsapp_recovery_analysis_message_limit}
 								onChange={(e) => {
 									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next)) return;
+									if (!Number.isFinite(next) || next < 0) return;
 									setAiSettings((prev) => ({
 										...prev,
 										whatsapp_recovery_analysis_message_limit: next,

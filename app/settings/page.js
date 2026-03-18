@@ -6,6 +6,7 @@ import Button from '../components/common/Button.jsx';
 import Input from '../components/common/Input.jsx';
 import Badge from '../components/common/Badge.jsx';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
+import { useToast } from '../components/common/ToastProvider.jsx';
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -14,6 +15,7 @@ import {
   faMobileScreen,
   faShieldHalved,
   faCheck,
+  faCircleInfo,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   ACCENT_COLORS,
@@ -47,8 +49,33 @@ const FREE_DELIVERY_SCOPE_OPTIONS = [
   { value: 'eligible_only', label: 'Only marked products' },
 ];
 
+const InfoHint = ({ text }) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="relative inline-flex items-center group">
+      <button
+        type="button"
+        className="ml-1 inline-flex items-center text-aa-gray hover:text-aa-dark-blue"
+        aria-label="Info"
+        onClick={() => setOpen((prev) => !prev)}
+        onBlur={() => setOpen(false)}
+      >
+        <FontAwesomeIcon icon={faCircleInfo} className="text-[12px]" />
+      </button>
+      <span
+        className={`pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-56 -translate-x-1/2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-aa-gray shadow-md transition ${
+          open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+        }`}
+      >
+        {text}
+      </span>
+    </span>
+  );
+};
+
 export default function SettingsPage() {
   const { user, loading: authLoading, refresh } = useAuth();
+  const { pushToast } = useToast();
   const [activeTab, setActiveTab] = useState('profile');
   const [profile, setProfile] = useState({
     name: '',
@@ -94,8 +121,65 @@ export default function SettingsPage() {
     category: '',
     businessType: 'both',
   });
+  const [paymentSummary, setPaymentSummary] = useState(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState('');
+  const [paymentLink, setPaymentLink] = useState(null);
+  const [paymentActionStatus, setPaymentActionStatus] = useState('');
+  const [razorpayForm, setRazorpayForm] = useState({
+    keyId: '',
+    keySecret: '',
+    showSecret: false,
+    clearSecret: false,
+  });
+  const [razorpaySaving, setRazorpaySaving] = useState(false);
+  const [razorpayStatus, setRazorpayStatus] = useState('');
+  const [billingAdmins, setBillingAdmins] = useState([]);
+  const [billingAdminsLoading, setBillingAdminsLoading] = useState(false);
+  const [billingAdminsStatus, setBillingAdminsStatus] = useState('');
   const restrictedMode = isRestrictedModeUser(user);
   const productAccess = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
+
+  const getToastTone = useCallback((message, fallback = 'success') => {
+    const text = String(message || '').toLowerCase();
+    if (
+      text.includes('fail') ||
+      text.includes('error') ||
+      text.includes('unable') ||
+      text.includes('could not') ||
+      text.includes('invalid')
+    ) {
+      return 'error';
+    }
+    return fallback;
+  }, []);
+
+  useEffect(() => {
+    if (!saveStatus) return;
+    pushToast({
+      type: getToastTone(saveStatus),
+      title: getToastTone(saveStatus) === 'error' ? 'Not saved' : 'Saved',
+      message: saveStatus,
+    });
+  }, [saveStatus, getToastTone, pushToast]);
+
+  useEffect(() => {
+    if (!passwordStatus) return;
+    pushToast({
+      type: getToastTone(passwordStatus),
+      title: getToastTone(passwordStatus) === 'error' ? 'Not saved' : 'Saved',
+      message: passwordStatus,
+    });
+  }, [passwordStatus, getToastTone, pushToast]);
+
+  useEffect(() => {
+    if (!whatsappActionStatus) return;
+    pushToast({
+      type: 'error',
+      title: 'Action failed',
+      message: whatsappActionStatus,
+    });
+  }, [whatsappActionStatus, pushToast]);
 
   useEffect(() => {
     settingsMountedRef.current = true;
@@ -198,6 +282,174 @@ export default function SettingsPage() {
     return response;
   }, []);
 
+  const fetchPaymentsApi = useCallback(async (path, options = {}) => {
+    const response = await fetch(`/api/payments${path}`, {
+      ...options,
+      credentials: 'include',
+    });
+    return response;
+  }, []);
+
+  const loadPaymentSummary = useCallback(async () => {
+    if (!user?.id) return;
+    setPaymentLoading(true);
+    setPaymentError('');
+    try {
+      const response = await fetchPaymentsApi('/summary');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to load payment summary.');
+      }
+      setPaymentSummary(payload?.data || null);
+      setRazorpayForm((prev) => ({
+        ...prev,
+        keyId: prev.keyId || payload?.data?.razorpay_key_id || '',
+      }));
+    } catch (error) {
+      setPaymentError(error.message || 'Failed to load payment summary.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  }, [fetchPaymentsApi, user?.id]);
+
+  const loadBillingAdmins = useCallback(async () => {
+    if (!user?.id || user?.admin_tier !== 'super_admin') return;
+    setBillingAdminsLoading(true);
+    setBillingAdminsStatus('');
+    try {
+      const response = await fetchPaymentsApi('/admins');
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to load admin billing settings.');
+      }
+      const rows = Array.isArray(payload?.data) ? payload.data : [];
+      setBillingAdmins(
+        rows.map((row) => ({
+          ...row,
+          edit: {
+            charge_enabled: row?.charge_enabled !== false,
+            free_days: '',
+            input_price_usd_per_1m:
+              row?.input_price_usd_per_1m ?? '',
+            output_price_usd_per_1m:
+              row?.output_price_usd_per_1m ?? '',
+          },
+        }))
+      );
+    } catch (error) {
+      setBillingAdminsStatus(error.message || 'Failed to load admin billing settings.');
+    } finally {
+      setBillingAdminsLoading(false);
+    }
+  }, [fetchPaymentsApi, user?.admin_tier, user?.id]);
+
+  const updateBillingAdminField = (adminId, field, value) => {
+    setBillingAdmins((prev) =>
+      prev.map((admin) =>
+        admin.id === adminId
+          ? { ...admin, edit: { ...admin.edit, [field]: value } }
+          : admin
+      )
+    );
+  };
+
+  const saveRazorpaySettings = async () => {
+    setRazorpaySaving(true);
+    setRazorpayStatus('');
+    try {
+      const payload = {
+        razorpay_key_id: razorpayForm.keyId,
+      };
+      if (razorpayForm.keySecret.trim() || razorpayForm.clearSecret) {
+        payload.razorpay_key_secret = razorpayForm.keySecret;
+      }
+      const response = await fetchPaymentsApi('/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to update Razorpay settings.');
+      }
+      setRazorpayForm((prev) => ({
+        ...prev,
+        keySecret: '',
+        clearSecret: false,
+      }));
+      setRazorpayStatus('Razorpay settings updated.');
+      await loadPaymentSummary();
+    } catch (error) {
+      setRazorpayStatus(error.message || 'Failed to update Razorpay settings.');
+    } finally {
+      setRazorpaySaving(false);
+    }
+  };
+
+  const createBillingPaymentLink = async () => {
+    setPaymentActionStatus('');
+    try {
+      const response = await fetchPaymentsApi('/pay', { method: 'POST' });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to create payment link.');
+      }
+      setPaymentLink(payload?.data || null);
+      if (payload?.data?.short_url) {
+        window.open(payload.data.short_url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      setPaymentActionStatus(error.message || 'Failed to create payment link.');
+    }
+  };
+
+  const verifyBillingPayment = async () => {
+    if (!paymentLink?.payment_link_id) return;
+    setPaymentActionStatus('');
+    try {
+      const response = await fetchPaymentsApi('/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payment_link_id: paymentLink.payment_link_id }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to verify payment.');
+      }
+      setPaymentActionStatus('Payment verified.');
+      await loadPaymentSummary();
+    } catch (error) {
+      setPaymentActionStatus(error.message || 'Failed to verify payment.');
+    }
+  };
+
+  const saveAdminBilling = async (adminId) => {
+    const admin = billingAdmins.find((item) => item.id === adminId);
+    if (!admin) return;
+    setBillingAdminsStatus('');
+    try {
+      const payload = {
+        charge_enabled: admin.edit.charge_enabled,
+        free_days: admin.edit.free_days,
+        input_price_usd_per_1m: admin.edit.input_price_usd_per_1m,
+        output_price_usd_per_1m: admin.edit.output_price_usd_per_1m,
+      };
+      const response = await fetchPaymentsApi(`/admins/${adminId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to update billing settings.');
+      }
+      setBillingAdminsStatus('Billing settings updated.');
+      await loadBillingAdmins();
+    } catch (error) {
+      setBillingAdminsStatus(error.message || 'Failed to update billing settings.');
+    }
+  };
+
   useEffect(() => {
     const storedAccent = getStoredAccentColor();
     const initialAccent = storedAccent || DEFAULT_ACCENT_COLOR;
@@ -208,6 +460,14 @@ export default function SettingsPage() {
     setTheme(initialTheme);
     applyTheme(initialTheme);
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (activeTab === 'payments') {
+      loadPaymentSummary();
+      loadBillingAdmins();
+    }
+  }, [activeTab, loadBillingAdmins, loadPaymentSummary, user?.id]);
 
   const handleAccentChange = (color) => {
     setAccentColor(color);
@@ -337,12 +597,14 @@ export default function SettingsPage() {
       const payload = await response.json();
       if (!isMountedRef.current) return;
       applyWhatsappStatusPayload(payload);
+      return payload;
     } catch (error) {
       if (isMountedRef.current) {
         markWhatsappDisconnectedUi();
         setWhatsappActionStatus('Could not load WhatsApp status.');
       }
     }
+    return null;
   }, [applyWhatsappStatusPayload, fetchWhatsAppApi, markWhatsappDisconnectedUi, user?.id]);
 
   useEffect(() => {
@@ -357,7 +619,7 @@ export default function SettingsPage() {
     fetchWhatsAppStatus(isMountedRef);
     const pollTimer = setInterval(() => {
       fetchWhatsAppStatus(isMountedRef);
-    }, 15000);
+    }, 5000);
     const handleFocus = () => {
       fetchWhatsAppStatus(isMountedRef);
     };
@@ -484,7 +746,7 @@ export default function SettingsPage() {
 
       // Some environments block/slow Socket.IO; poll briefly so QR / link-code appears quickly.
       for (let i = 0; i < 8; i += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        await new Promise((resolve) => setTimeout(resolve, 800));
         if (!settingsMountedRef.current) break;
         await fetchWhatsAppStatus(settingsMountedRef);
       }
@@ -774,14 +1036,6 @@ export default function SettingsPage() {
                         placeholder="Enter your email"
                       />
                       <Input
-                        label="Business Name"
-                        value={profile.business_name}
-                        onChange={(event) =>
-                          setProfile((prev) => ({ ...prev, business_name: event.target.value }))
-                        }
-                        placeholder="Enter your shop or business name"
-                      />
-                      <Input
                         label="Phone"
                         value={profile.phone}
                         onChange={(event) => setProfile((prev) => ({ ...prev, phone: event.target.value }))}
@@ -790,18 +1044,31 @@ export default function SettingsPage() {
                       />
                       <div className="w-full">
                         <label className="mb-2 block text-sm font-semibold text-aa-text-dark">
-                          Business Category <span className="text-red-500">*</span>
+                          Business Name <span className="text-red-500">*</span>
                         </label>
                         <input
+                          value={profile.business_name}
+                          onChange={(event) =>
+                            setProfile((prev) => ({ ...prev, business_name: event.target.value }))
+                          }
+                          placeholder="Your shop or business name"
+                          className="w-full rounded-lg border-2 border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-aa-orange sm:py-3 sm:text-base"
+                        />
+                        <p className="mt-1 text-xs text-aa-gray">
+                          This is the name customers will see.
+                        </p>
+                      </div>
+                      <div className="w-full">
+                        <Input
+                          label="Business Category (optional)"
                           value={profile.business_category}
                           onChange={(event) =>
                             setProfile((prev) => ({ ...prev, business_category: event.target.value }))
                           }
-                          placeholder="Shop, Retail, Cracker..."
-                          className="w-full rounded-lg border-2 border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-aa-orange sm:py-3 sm:text-base"
+                          placeholder="Retail, Salon, Coaching..."
                         />
                         <p className="mt-1 text-xs text-aa-gray">
-                          Add your business category that customers understand quickly.
+                          Helps customers understand what you sell.
                         </p>
                       </div>
                       <div className="w-full">
@@ -1215,7 +1482,7 @@ export default function SettingsPage() {
                       {showReconnectAction ? (
                         <Button
                           variant="primary"
-                          onClick={() => handleStartWhatsApp({ usePairingCode: false })}
+                          onClick={() => handleStartWhatsApp({ usePairingCode: true })}
                           disabled={isStartBlocked}
                           className="w-full sm:w-auto"
                         >
@@ -1225,21 +1492,21 @@ export default function SettingsPage() {
                       {showFreshConnectActions ? (
                         <Button
                           variant="primary"
-                          onClick={() => handleStartWhatsApp({ usePairingCode: false })}
+                          onClick={() => handleStartWhatsApp({ usePairingCode: true })}
                           disabled={isStartBlocked}
                           className="w-full sm:w-auto"
                         >
-                          {whatsappStatus === 'starting' ? 'Starting...' : 'Connect with QR'}
+                          {whatsappStatus === 'starting' ? 'Starting...' : 'Connect with Code'}
                         </Button>
                       ) : null}
                       {showFreshConnectActions ? (
                         <Button
                           variant="outline"
-                          onClick={() => handleStartWhatsApp({ usePairingCode: true })}
+                          onClick={() => handleStartWhatsApp({ usePairingCode: false })}
                           disabled={isStartBlocked}
                           className="w-full sm:w-auto"
                         >
-                          Get Link Code
+                          Connect with QR
                         </Button>
                       ) : null}
                       {showDisconnectAction ? (

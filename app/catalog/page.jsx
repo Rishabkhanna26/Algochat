@@ -7,6 +7,7 @@ import Modal from '../components/common/Modal.jsx';
 import Input from '../components/common/Input.jsx';
 import Loader from '../components/common/Loader.jsx';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
+import { useToast } from '../components/common/ToastProvider.jsx';
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
@@ -61,7 +62,7 @@ const buildEmptyForm = (type = 'service') => ({
   payment_required: false,
   free_delivery_eligible: false,
   show_on_whatsapp: true,
-  whatsapp_sort_order: 0,
+  whatsapp_sort_order: '',
 });
 
 const formatKeywords = (keywords) => {
@@ -134,15 +135,18 @@ const sortItemsForWhatsappPreview = (items = []) =>
   [...items].sort((a, b) => {
     const whatsappOrderA = parseNumber(a?.whatsapp_sort_order, 0) ?? 0;
     const whatsappOrderB = parseNumber(b?.whatsapp_sort_order, 0) ?? 0;
-    if (whatsappOrderA !== whatsappOrderB) return whatsappOrderA - whatsappOrderB;
     const orderA = parseNumber(a?.sort_order, 0) ?? 0;
     const orderB = parseNumber(b?.sort_order, 0) ?? 0;
+    const effectiveA = whatsappOrderA > 0 ? whatsappOrderA : orderA;
+    const effectiveB = whatsappOrderB > 0 ? whatsappOrderB : orderB;
+    if (effectiveA !== effectiveB) return effectiveA - effectiveB;
     if (orderA !== orderB) return orderA - orderB;
     return String(a?.name || '').localeCompare(String(b?.name || ''));
   });
 
 export default function CatalogPage() {
   const { user } = useAuth();
+  const { pushToast } = useToast();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -169,6 +173,16 @@ export default function CatalogPage() {
   const catalogLabel = getCatalogLabel(user);
   const isDurationEnabled =
     form.item_type === 'service' && Boolean(form.is_time_based);
+
+  useEffect(() => {
+    if (!notice) return;
+    pushToast({ type: 'success', title: 'Saved', message: notice });
+  }, [notice, pushToast]);
+
+  useEffect(() => {
+    if (!error) return;
+    pushToast({ type: 'error', title: 'Not saved', message: error });
+  }, [error, pushToast]);
 
   const fetchItems = async ({ bustCache = false } = {}) => {
     setLoading(true);
@@ -312,13 +326,16 @@ export default function CatalogPage() {
   const openEditModal = (item) => {
     const itemQuantityUnit = String(item.quantity_unit || '').trim().toLowerCase();
     const supportsPresetUnit = PRODUCT_QUANTITY_UNITS.includes(itemQuantityUnit);
+    const whatsappOrderValue = parseNumber(item.whatsapp_sort_order, 0) ?? 0;
     setEditingItem(item);
     setForm({
       item_type: item.item_type,
       name: item.name || '',
       category: item.category || '',
       price_label: normalizePriceLabel(item.price_label || ''),
-      duration_value: item.duration_value ?? item.duration_minutes ?? '',
+      duration_value: item.is_time_based
+        ? item.duration_value ?? item.duration_minutes ?? ''
+        : '',
       duration_unit: item.duration_unit || 'minutes',
       description: item.description || '',
       details_prompt: item.details_prompt || (item.item_type === 'service' ? DEFAULT_SERVICE_PROMPT : DEFAULT_PRODUCT_PROMPT),
@@ -334,7 +351,7 @@ export default function CatalogPage() {
       payment_required: Boolean(item.payment_required),
       free_delivery_eligible: Boolean(item.free_delivery_eligible),
       show_on_whatsapp: Boolean(item.show_on_whatsapp ?? true),
-      whatsapp_sort_order: item.whatsapp_sort_order ?? 0,
+      whatsapp_sort_order: whatsappOrderValue > 0 ? whatsappOrderValue : '',
     });
     setShowModal(true);
   };
@@ -751,7 +768,9 @@ export default function CatalogPage() {
                             <Badge variant="blue">Free delivery eligible</Badge>
                           )}
                           <Badge variant={item.show_on_whatsapp === false ? 'default' : 'blue'}>
-                            {item.show_on_whatsapp === false ? 'Hidden on WhatsApp' : 'Shown on WhatsApp'}
+                            {item.show_on_whatsapp === false
+                              ? 'Hidden in WhatsApp menu'
+                              : 'Shown in WhatsApp menu'}
                           </Badge>
                           {item.item_type === 'service' && (
                             <Badge variant="default">
@@ -793,9 +812,12 @@ export default function CatalogPage() {
                   </div>
 
                   <div className="flex flex-col items-start md:items-end gap-2">
-                    <span className="text-xs text-aa-gray">Order: {item.sort_order ?? 0}</span>
+                    <span className="text-xs text-aa-gray">Catalog order: {item.sort_order ?? 0}</span>
                     <span className="text-xs text-aa-gray">
-                      WhatsApp Order: {item.whatsapp_sort_order ?? 0}
+                      WhatsApp order:{' '}
+                      {Number(item.whatsapp_sort_order ?? 0) > 0
+                        ? item.whatsapp_sort_order
+                        : 'Same as catalog'}
                     </span>
                     <div className="flex items-center gap-3 text-sm font-semibold">
                       <button
@@ -848,8 +870,8 @@ export default function CatalogPage() {
           <Card className="border border-[#f1dcc5] bg-gradient-to-br from-white via-[#fff9f2] to-[#fdebd7] p-5 shadow-md">
             <h3 className="text-lg font-bold text-aa-dark-blue mb-2">WhatsApp Preview</h3>
             <p className="text-sm text-aa-dark-blue/80 mb-4">
-              Choose how many active items appear in WhatsApp. Only items marked
-              <span className="font-semibold text-aa-text-dark"> Shown on WhatsApp </span>
+              Pick how many items show in your WhatsApp menu. Only items set to
+              <span className="font-semibold text-aa-text-dark"> Shown in WhatsApp menu </span>
               are included.
             </p>
             <div className="mb-4 rounded-[24px] border-2 border-[#FDA913] bg-gradient-to-br from-[#fffaf4] via-[#fff2e3] to-[#ffe4bf] p-4 shadow-lg shadow-[#FDA913]/10">
@@ -859,7 +881,7 @@ export default function CatalogPage() {
                     Display Controls
                   </p>
                   <p className="mt-1 text-sm font-semibold text-aa-dark-blue">
-                    Control how much of your catalog appears in WhatsApp
+                    Control how much of your catalog shows in WhatsApp
                   </p>
                 </div>
                 <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-aa-dark-blue shadow-sm">
@@ -903,8 +925,8 @@ export default function CatalogPage() {
                 )}
               </div>
               <p className="mt-3 rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-xs text-aa-dark-blue/80">
-                Use <span className="font-semibold text-aa-text-dark">0</span> to hide that section from the
-                WhatsApp intro and catalog menu.
+                Use <span className="font-semibold text-aa-text-dark">0</span> to hide that section in WhatsApp
+                (customers will not see it).
               </p>
               <Button
                 type="button"
@@ -1158,8 +1180,10 @@ export default function CatalogPage() {
 
                 <div className="mt-4 flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-semibold text-aa-text-dark">Show on WhatsApp</p>
-                    <p className="text-xs text-aa-gray">Show or hide this item in WhatsApp menus.</p>
+                    <p className="text-sm font-semibold text-aa-text-dark">Show in WhatsApp menu</p>
+                    <p className="text-xs text-aa-gray">
+                      If off, customers will not see this item in WhatsApp. It stays in your catalog here.
+                    </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
@@ -1269,10 +1293,14 @@ export default function CatalogPage() {
                       label="Service Time Type"
                       value={form.is_time_based ? 'time_based' : 'not_time_based'}
                       onChange={(value) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          is_time_based: value === 'time_based',
-                        }))
+                        setForm((prev) => {
+                          const isTimeBased = value === 'time_based';
+                          return {
+                            ...prev,
+                            is_time_based: isTimeBased,
+                            duration_value: isTimeBased ? prev.duration_value : '',
+                          };
+                        })
                       }
                       options={serviceTimeTypeOptions}
                       className="mt-2"
@@ -1283,16 +1311,20 @@ export default function CatalogPage() {
 
                 <div className="mt-4">
                   <Input
-                    label="Sort Order"
+                    label="Catalog Order (1 = first)"
                     type="number"
                     value={form.sort_order}
                     onChange={(event) => setForm((prev) => ({ ...prev, sort_order: event.target.value }))}
+                    placeholder="e.g., 1"
                   />
+                  <p className="mt-2 text-xs text-aa-gray">
+                    Smaller number shows earlier in your main catalog list.
+                  </p>
                 </div>
 
                 <div className="mt-4">
                   <Input
-                    label="WhatsApp Sort Order"
+                    label="WhatsApp Menu Order (optional)"
                     type="number"
                     value={form.whatsapp_sort_order}
                     onChange={(event) =>
@@ -1301,17 +1333,17 @@ export default function CatalogPage() {
                         whatsapp_sort_order: event.target.value,
                       }))
                     }
+                    placeholder="Leave empty to match catalog"
                   />
                   <p className="mt-2 text-xs text-aa-gray">
-                    Smaller number shows first on WhatsApp. Use this if WhatsApp order should be different from your
-                    main catalog order.
+                    Only for WhatsApp. Smaller number shows earlier. Leave blank to keep the same order as your catalog.
                   </p>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
                 <p className="text-sm font-semibold text-aa-text-dark">WhatsApp preview</p>
-                <p className="text-xs text-aa-gray">A quick look at what customers see.</p>
+                <p className="text-xs text-aa-gray">A quick look at what customers see in WhatsApp.</p>
                 <div className="mt-4 space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-semibold text-aa-text-dark truncate">
@@ -1342,10 +1374,13 @@ export default function CatalogPage() {
                     Status: {form.is_active ? 'Active' : 'Hidden'}
                   </p>
                   <p className="text-xs text-aa-gray">
-                    WhatsApp visibility: {form.show_on_whatsapp ? 'Shown' : 'Hidden'}
+                    WhatsApp menu: {form.show_on_whatsapp ? 'Shown' : 'Hidden'}
                   </p>
                   <p className="text-xs text-aa-gray">
-                    WhatsApp order: {parseNumber(form.whatsapp_sort_order, 0) ?? 0}
+                    WhatsApp menu order:{' '}
+                    {parseNumber(form.whatsapp_sort_order, 0) > 0
+                      ? parseNumber(form.whatsapp_sort_order, 0)
+                      : 'Same as catalog'}
                   </p>
                   {form.item_type === 'service' && form.is_bookable && (
                     <p className="text-xs text-aa-gray">
