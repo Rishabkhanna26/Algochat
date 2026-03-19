@@ -5,7 +5,7 @@ export default function Card({
   hover = false,
   unstyled = false,
 }) {
-  const baseClass = unstyled ? '' : 'bg-white rounded-xl p-4 sm:p-6 shadow-sm';
+  const baseClass = unstyled ? '' : 'bg-white rounded-xl p-4 sm:p-6 shadow-sm w-full min-w-0';
   return (
     <div
       className={`${baseClass} ${hover ? 'hover:shadow-md cursor-pointer' : ''} ${className}`.trim()}

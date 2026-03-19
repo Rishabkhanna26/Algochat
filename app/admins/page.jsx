@@ -26,7 +26,11 @@ export default function AdminsPage() {
   const [error, setError] = useState('');
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
+  const [revokingAccess, setRevokingAccess] = useState(false);
   const [editError, setEditError] = useState('');
+  const [typeRequests, setTypeRequests] = useState([]);
+  const [typeRequestsLoading, setTypeRequestsLoading] = useState(false);
+  const [typeRequestsError, setTypeRequestsError] = useState('');
   const [editForm, setEditForm] = useState({
     id: null,
     name: '',
@@ -61,6 +65,7 @@ export default function AdminsPage() {
   useEffect(() => {
     if (!user || user.admin_tier !== 'super_admin') return;
     fetchAdmins();
+    fetchTypeRequests();
   }, [user]);
 
   const fetchAdmins = async () => {
@@ -77,6 +82,66 @@ export default function AdminsPage() {
       setError(err.message || 'Failed to load admins');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const formatCurrency = (value = 0, currency = 'INR') => {
+    const safeValue = Number(value || 0);
+    if (!Number.isFinite(safeValue)) return `${currency} 0`;
+    try {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency,
+        maximumFractionDigits: 2,
+      }).format(safeValue);
+    } catch {
+      return `${currency} ${safeValue.toFixed(2)}`;
+    }
+  };
+
+  const fetchTypeRequests = async () => {
+    setTypeRequestsLoading(true);
+    setTypeRequestsError('');
+    try {
+      const response = await fetch('/api/admins/business-type-requests?status=pending', {
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to load business type requests.');
+      }
+      setTypeRequests(data.data || []);
+    } catch (err) {
+      setTypeRequestsError(err.message || 'Failed to load business type requests.');
+    } finally {
+      setTypeRequestsLoading(false);
+    }
+  };
+
+  const handleTypeRequestAction = async (requestId, action) => {
+    if (!requestId) return;
+    setTypeRequestsError('');
+    try {
+      const response = await fetch(`/api/admins/business-type-requests/${requestId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update request.');
+      }
+      setTypeRequests((prev) => prev.filter((req) => req.id !== requestId));
+      fetchAdmins();
+      pushToast({
+        type: 'success',
+        title: 'Saved',
+        message: action === 'approve' ? 'Request approved.' : 'Request rejected.',
+      });
+    } catch (err) {
+      setTypeRequestsError(err.message || 'Failed to update request.');
+      pushToast({ type: 'error', title: 'Not saved', message: err.message || 'Request failed.' });
     }
   };
 
@@ -134,16 +199,18 @@ export default function AdminsPage() {
     setEditSaving(true);
     setEditError('');
     try {
+      const rawDuration = editForm.access_duration_value;
+      const parsedDuration = rawDuration === '' ? null : Number(rawDuration);
+      const hasDuration = Number.isFinite(parsedDuration) && parsedDuration > 0;
+      const nextStatus = hasDuration ? 'active' : editForm.status;
       const result = await updateAdmin(editForm.id, {
         admin_tier: editForm.admin_tier,
-        status: editForm.status,
+        status: nextStatus,
         business_category: editForm.business_category,
         business_type: editForm.business_type,
         booking_enabled: Boolean(editForm.booking_enabled),
         access_duration_value:
-          editForm.access_duration_value === ''
-            ? (editForm.status === 'active' ? 0 : undefined)
-            : Number(editForm.access_duration_value),
+          rawDuration === '' ? (nextStatus === 'active' ? 0 : undefined) : Number(parsedDuration),
         access_duration_unit: editForm.access_duration_unit,
       });
       if (!result.ok) {
@@ -155,6 +222,32 @@ export default function AdminsPage() {
       setEditError(err.message || 'Failed to update admin');
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  const revokeAccessTimer = async () => {
+    if (!editForm.id) return;
+    setRevokingAccess(true);
+    setEditError('');
+    try {
+      const result = await updateAdmin(editForm.id, {
+        status: editForm.status,
+        access_duration_value: 0,
+        access_duration_unit: editForm.access_duration_unit,
+      });
+      if (!result.ok) {
+        throw result.error || new Error('Failed to revoke access timer');
+      }
+      setEditForm((prev) => ({
+        ...prev,
+        access_duration_value: '',
+        access_expires_at: null,
+      }));
+      pushToast({ type: 'success', title: 'Saved', message: 'Access timer revoked.' });
+    } catch (err) {
+      setEditError(err.message || 'Failed to revoke access timer');
+    } finally {
+      setRevokingAccess(false);
     }
   };
 
@@ -274,6 +367,96 @@ export default function AdminsPage() {
           <p className="text-3xl font-bold text-green-600">{activeCount}</p>
         </Card>
       </div>
+
+      <Card className="p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-aa-dark-blue">Business Type Requests</h3>
+            <p className="text-sm text-aa-gray">Pending changes awaiting approval</p>
+          </div>
+          <Button
+            variant="outline"
+            onClick={fetchTypeRequests}
+            disabled={typeRequestsLoading}
+            className="w-full sm:w-auto"
+          >
+            Refresh
+          </Button>
+        </div>
+        {typeRequestsError && (
+          <p className="mt-2 text-sm text-red-600">{typeRequestsError}</p>
+        )}
+        {typeRequestsLoading ? (
+          <div className="mt-4">
+            <Loader size="sm" text="Loading requests..." />
+          </div>
+        ) : typeRequests.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-aa-gray">
+            No pending business type requests.
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-1 gap-4">
+            {typeRequests.map((req) => {
+              const delta = Number(req.monthly_delta_inr || 0);
+              const deltaLabel =
+                delta === 0
+                  ? 'No gap'
+                  : delta > 0
+                  ? `Upgrade gap: ${formatCurrency(delta)}`
+                  : `Refund gap: ${formatCurrency(Math.abs(delta))}`;
+              return (
+                <div
+                  key={req.id}
+                  className="rounded-xl border border-gray-200 bg-white px-4 py-4"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-aa-text-dark">
+                        {req.admin_name || 'Admin'}{' '}
+                        <span className="text-xs text-aa-gray">
+                          {req.admin_email || req.admin_phone || ''}
+                        </span>
+                      </p>
+                      <p className="text-sm text-aa-gray mt-1">
+                        {req.current_business_type || 'both'} →{' '}
+                        {req.requested_business_type || 'both'}
+                      </p>
+                      <p className="text-xs text-aa-gray mt-1">{deltaLabel}</p>
+                      {req.reason && (
+                        <p className="mt-2 text-xs text-aa-gray">Reason: {req.reason}</p>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 sm:items-end">
+                      <Badge variant={req.payment_status === 'paid' ? 'green' : 'yellow'}>
+                        {req.payment_required
+                          ? req.payment_status === 'paid'
+                            ? 'Payment paid'
+                            : 'Payment pending'
+                          : 'No payment required'}
+                      </Badge>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="primary"
+                          onClick={() => handleTypeRequestAction(req.id, 'approve')}
+                          disabled={req.payment_required && req.payment_status !== 'paid'}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => handleTypeRequestAction(req.id, 'reject')}
+                        >
+                          Reject
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
 
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <Input
@@ -429,25 +612,21 @@ export default function AdminsPage() {
               {businessTypeOptions.map((option) => {
                 const active = editForm.business_type === option.value;
                 return (
-                  <button
+                  <div
                     key={option.value}
-                    type="button"
-                    onClick={() =>
-                      setEditForm((prev) => ({ ...prev, business_type: option.value }))
-                    }
-                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
                       active
                         ? 'border-aa-orange bg-aa-orange/10 text-aa-dark-blue'
-                        : 'border-gray-200 text-aa-gray hover:border-aa-orange hover:text-aa-orange'
+                        : 'border-gray-200 text-aa-gray'
                     }`}
                   >
                     {option.label}
-                  </button>
+                  </div>
                 );
               })}
             </div>
             <p className="mt-2 text-xs text-aa-gray">
-              New admins still stay product-based, service-based, or both. Booking access is added separately.
+              Business type changes must be requested by the admin and approved in the requests list above.
             </p>
           </div>
 
@@ -511,7 +690,7 @@ export default function AdminsPage() {
           <div className="rounded-lg border border-gray-200 p-3">
             <p className="text-sm font-semibold text-aa-text-dark mb-2">Access Timer (optional)</p>
             <p className="text-xs text-aa-gray mb-3">
-              Set how long this admin stays active. Leave empty for no expiry.
+              Set how long this admin stays active. Entering a duration will activate access until expiry.
             </p>
             <div className="grid grid-cols-2 gap-2">
               <Input
@@ -537,9 +716,18 @@ export default function AdminsPage() {
               </div>
             </div>
             {editForm.access_expires_at && (
-              <p className="mt-2 text-xs text-aa-gray">
-                Current expiry: {new Date(editForm.access_expires_at).toLocaleString()}
-              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <p className="text-xs text-aa-gray">
+                  Current expiry: {new Date(editForm.access_expires_at).toLocaleString()}
+                </p>
+                <Button
+                  variant="ghost"
+                  onClick={revokeAccessTimer}
+                  disabled={revokingAccess}
+                >
+                  {revokingAccess ? 'Revoking...' : 'Revoke Access Timer'}
+                </Button>
+              </div>
             )}
           </div>
 
@@ -547,7 +735,7 @@ export default function AdminsPage() {
             <Button variant="outline" onClick={() => setEditOpen(false)}>
               Cancel
             </Button>
-            <Button variant="primary" onClick={saveEdit} disabled={editSaving}>
+            <Button variant="primary" onClick={saveEdit} disabled={editSaving || revokingAccess}>
               {editSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </div>

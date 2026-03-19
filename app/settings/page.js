@@ -94,6 +94,14 @@ export default function SettingsPage() {
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
   const [saveStatus, setSaveStatus] = useState('');
+  const [businessTypeRequest, setBusinessTypeRequest] = useState({
+    desired: 'product',
+    reason: '',
+    existing: null,
+    loading: false,
+    error: '',
+    success: '',
+  });
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [whatsappConnected, setWhatsappConnected] = useState(false);
@@ -585,6 +593,52 @@ export default function SettingsPage() {
     }));
   }, [profile.business_category, profile.business_type]);
 
+  useEffect(() => {
+    if (!user || user.admin_tier === 'super_admin') return;
+    const nextDesired =
+      BUSINESS_TYPE_OPTIONS.find((option) => option.value !== profile.business_type)?.value ||
+      'product';
+    setBusinessTypeRequest((prev) => ({
+      ...prev,
+      desired:
+        prev.desired && prev.desired !== profile.business_type ? prev.desired : nextDesired,
+    }));
+  }, [profile.business_type, user]);
+
+  useEffect(() => {
+    if (!user || user.admin_tier === 'super_admin') return;
+    let isMounted = true;
+    const loadRequest = async () => {
+      try {
+        setBusinessTypeRequest((prev) => ({ ...prev, loading: true, error: '', success: '' }));
+        const response = await fetch('/api/profile/business-type-request', {
+          credentials: 'include',
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to load business type request.');
+        }
+        if (!isMounted) return;
+        setBusinessTypeRequest((prev) => ({
+          ...prev,
+          existing: data.data || null,
+          loading: false,
+        }));
+      } catch (error) {
+        if (!isMounted) return;
+        setBusinessTypeRequest((prev) => ({
+          ...prev,
+          loading: false,
+          error: error.message || 'Failed to load request.',
+        }));
+      }
+    };
+    loadRequest();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
   const fetchWhatsAppStatus = useCallback(async (isMountedRef = { current: true }) => {
     try {
       if (!user?.id) return;
@@ -1072,19 +1126,183 @@ export default function SettingsPage() {
                         </p>
                       </div>
                       <div className="w-full">
-                        <GeminiSelect
-                          label="Business Type *"
-                          value={profile.business_type}
-                          onChange={(value) =>
-                            setProfile((prev) => ({ ...prev, business_type: value }))
-                          }
-                          options={BUSINESS_TYPE_OPTIONS}
-                          variant="vibrant"
-                        />
-                        <p className="mt-1 text-xs text-aa-gray">
-                          Product-based shows orders, service-based shows appointments, both shows both.
-                        </p>
+                        {user?.admin_tier === 'super_admin' ? (
+                          <>
+                            <GeminiSelect
+                              label="Business Type *"
+                              value={profile.business_type}
+                              onChange={(value) =>
+                                setProfile((prev) => ({ ...prev, business_type: value }))
+                              }
+                              options={BUSINESS_TYPE_OPTIONS}
+                              variant="vibrant"
+                            />
+                            <p className="mt-1 text-xs text-aa-gray">
+                              Product-based shows orders, service-based shows appointments, both shows both.
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <label className="mb-2 block text-sm font-semibold text-aa-text-dark">
+                              Business Type <span className="text-red-500">*</span>
+                            </label>
+                            <div className="w-full rounded-lg border-2 border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-aa-text-dark sm:py-3 sm:text-base">
+                              {getBusinessTypeLabel(profile.business_type)}
+                            </div>
+                            <p className="mt-1 text-xs text-aa-gray">
+                              Business type changes require a request and payment approval by super admin.
+                            </p>
+                          </>
+                        )}
                       </div>
+                      {user?.admin_tier !== 'super_admin' && (
+                        <div className="md:col-span-2 rounded-2xl border border-aa-orange/20 bg-[#fff8f1] p-4 sm:p-5">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-aa-orange">
+                                Business Type Request
+                              </p>
+                              <p className="mt-2 text-lg font-semibold text-aa-text-dark">
+                                Request a business type change
+                              </p>
+                              <p className="mt-1 text-sm text-aa-gray">
+                                Super admin approves changes after payment. Downgrades show the refund gap.
+                              </p>
+                            </div>
+                            {businessTypeRequest?.existing?.payment_required &&
+                              businessTypeRequest?.existing?.payment_status !== 'paid' &&
+                              businessTypeRequest?.existing?.payment_link_url && (
+                                <Button
+                                  variant="primary"
+                                  onClick={() =>
+                                    window.open(
+                                      businessTypeRequest.existing.payment_link_url,
+                                      '_blank',
+                                      'noopener'
+                                    )
+                                  }
+                                >
+                                  Pay Now
+                                </Button>
+                              )}
+                          </div>
+                          {businessTypeRequest?.existing?.status === 'pending' ? (
+                            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm">
+                                <p className="text-xs uppercase text-aa-gray">Requested</p>
+                                <p className="mt-1 font-semibold text-aa-text-dark">
+                                  {getBusinessTypeLabel(businessTypeRequest.existing.requested_business_type)}
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm">
+                                <p className="text-xs uppercase text-aa-gray">Payment</p>
+                                <p className="mt-1 font-semibold text-aa-text-dark">
+                                  {businessTypeRequest.existing.payment_required
+                                    ? businessTypeRequest.existing.payment_status === 'paid'
+                                      ? 'Paid'
+                                      : 'Pending'
+                                    : 'Not required'}
+                                </p>
+                              </div>
+                              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm">
+                                <p className="text-xs uppercase text-aa-gray">Gap</p>
+                                <p className="mt-1 font-semibold text-aa-text-dark">
+                                  {Number(businessTypeRequest.existing.monthly_delta_inr || 0) === 0
+                                    ? '—'
+                                    : `₹ ${Number(
+                                        Math.abs(Number(businessTypeRequest.existing.monthly_delta_inr || 0))
+                                      ).toFixed(2)}`}
+                                </p>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                              <GeminiSelect
+                                label="Requested Business Type"
+                                value={businessTypeRequest.desired}
+                                onChange={(value) =>
+                                  setBusinessTypeRequest((prev) => ({ ...prev, desired: value }))
+                                }
+                                options={BUSINESS_TYPE_OPTIONS.filter(
+                                  (option) => option.value !== profile.business_type
+                                )}
+                                variant="vibrant"
+                              />
+                              <Input
+                                label="Reason (optional)"
+                                value={businessTypeRequest.reason}
+                                onChange={(event) =>
+                                  setBusinessTypeRequest((prev) => ({
+                                    ...prev,
+                                    reason: event.target.value,
+                                  }))
+                                }
+                                placeholder="Why do you want to change?"
+                              />
+                              <div className="flex items-end">
+                                <Button
+                                  variant="primary"
+                                  className="w-full"
+                                  onClick={async () => {
+                                    try {
+                                      setBusinessTypeRequest((prev) => ({
+                                        ...prev,
+                                        loading: true,
+                                        error: '',
+                                        success: '',
+                                      }));
+                                      const response = await fetch(
+                                        '/api/profile/business-type-request',
+                                        {
+                                          method: 'POST',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          credentials: 'include',
+                                          body: JSON.stringify({
+                                            business_type: businessTypeRequest.desired,
+                                            reason: businessTypeRequest.reason,
+                                          }),
+                                        }
+                                      );
+                                      const data = await response.json();
+                                      if (!response.ok) {
+                                        throw new Error(data.error || 'Could not submit request.');
+                                      }
+                                      setBusinessTypeRequest((prev) => ({
+                                        ...prev,
+                                        existing: data.data || null,
+                                        loading: false,
+                                        success: data.data?.payment?.short_url
+                                          ? 'Request submitted. Complete payment to proceed.'
+                                          : 'Request submitted.',
+                                      }));
+                                    } catch (error) {
+                                      setBusinessTypeRequest((prev) => ({
+                                        ...prev,
+                                        loading: false,
+                                        error: error.message || 'Failed to submit request.',
+                                      }));
+                                    }
+                                  }}
+                                  disabled={businessTypeRequest.loading}
+                                >
+                                  {businessTypeRequest.loading ? 'Submitting...' : 'Submit Request'}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                          {(businessTypeRequest.error || businessTypeRequest.success) && (
+                            <div
+                              className={`mt-4 rounded-lg px-4 py-3 text-sm ${
+                                businessTypeRequest.error
+                                  ? 'border border-red-200 bg-red-50 text-red-700'
+                                  : 'border border-green-200 bg-green-50 text-green-700'
+                              }`}
+                            >
+                              {businessTypeRequest.error || businessTypeRequest.success}
+                            </div>
+                          )}
+                        </div>
+                      )}
                       <div className="md:col-span-2">
                         <label className="mb-2 block text-sm font-semibold text-aa-text-dark">
                           Business Address
@@ -1270,7 +1488,9 @@ export default function SettingsPage() {
                               email: profile.email,
                               business_name: profile.business_name,
                               business_category: profile.business_category,
-                              business_type: profile.business_type,
+                              ...(user?.admin_tier === 'super_admin'
+                                ? { business_type: profile.business_type }
+                                : {}),
                               business_address: profile.business_address,
                               business_hours: profile.business_hours,
                               business_map_url: profile.business_map_url,

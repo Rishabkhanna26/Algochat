@@ -10,12 +10,12 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md' })
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black bg-opacity-50 p-2 sm:p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black bg-opacity-50 p-2 sm:p-4 aa-fade-in"
       onClick={onClose}
       data-testid="modal-overlay"
     >
       <div 
-        className={`bg-white rounded-xl border border-gray-200 shadow-2xl ${sizes[size]} w-full max-h-[92dvh] overflow-y-auto`}
+        className={`bg-white rounded-xl border border-gray-200 shadow-2xl ${sizes[size]} w-full max-h-[92dvh] overflow-y-auto aa-slide-up`}
         onClick={(e) => e.stopPropagation()}
         data-testid="modal-content"
       >

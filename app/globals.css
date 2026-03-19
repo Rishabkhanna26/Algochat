@@ -54,6 +54,65 @@ body {
   background-color: rgb(var(--aa-light-bg));
   color: rgb(var(--aa-text-dark));
   overflow-x: hidden;
+  overflow-wrap: anywhere;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
+table {
+  width: 100%;
+  max-width: 100%;
+}
+
+@keyframes aa-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes aa-slide-up {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes aa-slide-left {
+  from { opacity: 0; transform: translate3d(-16px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+
+@keyframes aa-pulse-soft {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+.aa-fade-in {
+  animation: aa-fade-in 0.22s ease-out;
+}
+
+.aa-slide-up {
+  animation: aa-slide-up 0.26s ease-out;
+}
+
+.aa-slide-left {
+  animation: aa-slide-left 0.24s ease-out;
+}
+
+.aa-pulse-soft {
+  animation: aa-pulse-soft 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aa-fade-in,
+  .aa-slide-up,
+  .aa-slide-left,
+  .aa-pulse-soft {
+    animation: none !important;
+  }
 }
 
 :root[data-theme='dark'] body {

@@ -99,6 +99,8 @@ export default function AppointmentsPage() {
   const restrictedMode = isRestrictedModeUser(user);
 
   const hasAppointmentsAccess = Boolean(user?.id) && (restrictedMode || hasAppointmentAccess(user));
+  const businessTypeCta =
+    user?.admin_tier === 'super_admin' ? 'Update Business Type' : 'Request Business Type Change';
   const canUseServiceAppointments = Boolean(user?.id) && (restrictedMode || hasServiceAccess(user));
   const canUseBookingAppointments = Boolean(user?.id) && (restrictedMode || hasBookingAccess(user));
   const label = useMemo(() => 'Appointments', []);
@@ -971,7 +973,7 @@ export default function AppointmentsPage() {
           </p>
           <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
             <Button variant="primary" onClick={() => router.push('/settings')}>
-              Update Business Type
+              {businessTypeCta}
             </Button>
             <Button variant="outline" onClick={() => router.push('/catalog')}>
               View Products & Services

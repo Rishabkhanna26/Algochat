@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCircleInfo } from '@fortawesome/free-solid-svg-icons';
+import {
+  faBolt,
+  faCircleInfo,
+  faCoins,
+  faCreditCard,
+  faWallet,
+} from '@fortawesome/free-solid-svg-icons';
 import Card from '../components/common/Card.jsx';
 import Button from '../components/common/Button.jsx';
 import Input from '../components/common/Input.jsx';
@@ -509,9 +515,9 @@ export default function BillingPage() {
   const maintenancePct = toNumber(summary?.pricing?.maintenance_fee_pct, 12);
   const dashboardOfferOptions = [
     { months: 1, label: '1 month', discount: 0 },
-    { months: 3, label: '3 months', discount: 5 },
-    { months: 6, label: '6 months', discount: 8 },
-    { months: 12, label: '12 months', discount: 10 },
+    { months: 3, label: '3 months', discount: 8 },
+    { months: 6, label: '6 months', discount: 10 },
+    { months: 12, label: '12 months', discount: 12 },
   ];
   const selectedDashboardMonths = dashboardOfferOptions.find(
     (option) => String(option.months) === String(dashboardMonths)
@@ -519,17 +525,21 @@ export default function BillingPage() {
   const selectedDashboardDiscount =
     dashboardOfferOptions.find((option) => option.months === selectedDashboardMonths)?.discount || 0;
   const dashboardMonthlyCharge = Number(dashboardAmounts.total_inr || 0);
-  const dashboardBaseTotal = dashboardMonthlyCharge * selectedDashboardMonths;
+  const dashboardBaseMonthly = Number(dashboardAmounts.base_inr || 0);
+  const dashboardBookingMonthly = Number(dashboardAmounts.booking_inr || 0);
+  const dashboardBaseTotal = dashboardBaseMonthly * selectedDashboardMonths;
+  const dashboardBookingTotal = dashboardBookingMonthly * selectedDashboardMonths;
   const dashboardDiscountAmount = Number(
     (dashboardBaseTotal * (selectedDashboardDiscount / 100)).toFixed(2)
   );
   const dashboardDiscountedBase = Number(
     (dashboardBaseTotal - dashboardDiscountAmount).toFixed(2)
   );
+  const dashboardSubtotal = Number((dashboardDiscountedBase + dashboardBookingTotal).toFixed(2));
   const dashboardMaintenanceFee = Number(
-    (dashboardDiscountedBase * (maintenancePct / 100)).toFixed(2)
+    (dashboardSubtotal * (maintenancePct / 100)).toFixed(2)
   );
-  const dashboardTotalDue = Number((dashboardDiscountedBase + dashboardMaintenanceFee).toFixed(2));
+  const dashboardTotalDue = Number((dashboardSubtotal + dashboardMaintenanceFee).toFixed(2));
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -546,11 +556,16 @@ export default function BillingPage() {
 
       <Card className="border border-gray-200 bg-white">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-aa-text-dark">Token Balances</h2>
-            <p className="text-xs text-aa-gray">
-              Free tokens renew monthly and carry over until the cap.
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+              <FontAwesomeIcon icon={faCoins} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-aa-text-dark">Token Balances</h2>
+              <p className="text-xs text-aa-gray">
+                Free tokens renew monthly and carry over until the cap.
+              </p>
+            </div>
           </div>
           {summary?.billing_state === 'free' ? (
             <Badge variant="green">Free Tokens Active</Badge>
@@ -562,49 +577,59 @@ export default function BillingPage() {
         </div>
 
         {loading ? (
-          <div className="mt-4 rounded-xl bg-gray-50 px-4 py-4 text-sm text-aa-gray">
+          <div className="mt-5 rounded-2xl bg-gray-50 px-4 py-4 text-sm text-aa-gray">
             Loading token balances...
           </div>
         ) : (
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-aa-gray">Free Tokens</p>
-              <div className="mt-2 space-y-2 text-sm text-aa-text-dark">
-                <p>
-                  Input: <span className="font-semibold">{balances.free_input_tokens || 0}</span>{' '}
-                  <span className="text-xs text-aa-gray">/ {balances.free_input_cap || 0}</span>
-                </p>
-                <p>
-                  Output: <span className="font-semibold">{balances.free_output_tokens || 0}</span>{' '}
-                  <span className="text-xs text-aa-gray">/ {balances.free_output_cap || 0}</span>
-                </p>
-                <p className="text-xs text-aa-gray">
-                  Adds {balances.monthly_free_input || 0} input + {balances.monthly_free_output || 0} output each month.
-                </p>
-                {balances.next_reset_at && (
-                  <p className="text-xs text-aa-gray">
-                    Next refresh: {new Date(balances.next_reset_at).toLocaleDateString('en-IN')}
+          <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-aa-gray">Free Tokens</p>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-gray-100 bg-white p-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-aa-gray">Input</p>
+                  <p className="mt-1 text-lg font-semibold text-aa-text-dark">
+                    {balances.free_input_tokens || 0}
                   </p>
-                )}
+                  <p className="text-[11px] text-aa-gray">/ {balances.free_input_cap || 0}</p>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-white p-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-aa-gray">Output</p>
+                  <p className="mt-1 text-lg font-semibold text-aa-text-dark">
+                    {balances.free_output_tokens || 0}
+                  </p>
+                  <p className="text-[11px] text-aa-gray">/ {balances.free_output_cap || 0}</p>
+                </div>
               </div>
-            </div>
-            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-aa-gray">Prepaid Tokens</p>
-              <div className="mt-2 space-y-2 text-sm text-aa-text-dark">
-                <p>
-                  Input: <span className="font-semibold">{balances.paid_input_tokens || 0}</span>
-                </p>
-                <p>
-                  Output: <span className="font-semibold">{balances.paid_output_tokens || 0}</span>
-                </p>
-                <p className="text-xs text-aa-gray">
-                  Prepaid tokens never expire.
-                </p>
+              <div className="mt-3 text-xs text-aa-gray">
+                Adds {balances.monthly_free_input || 0} input + {balances.monthly_free_output || 0} output each month.
               </div>
+              {balances.next_reset_at && (
+                <div className="mt-1 text-xs text-aa-gray">
+                  Next refresh: {new Date(balances.next_reset_at).toLocaleDateString('en-IN')}
+                </div>
+              )}
             </div>
-            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-aa-gray">AI Usage</p>
-              <div className="mt-2 space-y-2 text-sm text-aa-text-dark">
+            <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-aa-gray">Prepaid Tokens</p>
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-gray-100 bg-white p-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-aa-gray">Input</p>
+                  <p className="mt-1 text-lg font-semibold text-aa-text-dark">
+                    {balances.paid_input_tokens || 0}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-white p-3">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-aa-gray">Output</p>
+                  <p className="mt-1 text-lg font-semibold text-aa-text-dark">
+                    {balances.paid_output_tokens || 0}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3 text-xs text-aa-gray">Prepaid tokens never expire.</div>
+            </div>
+            <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+              <p className="text-xs uppercase tracking-[0.2em] text-aa-gray">AI Usage</p>
+              <div className="mt-3 space-y-2 text-sm text-aa-text-dark">
                 <p>
                   Conversations:{' '}
                   <span className="font-semibold">{summary?.usage?.conversation_count || 0}</span>
@@ -626,48 +651,51 @@ export default function BillingPage() {
       </Card>
 
       <Card className="border border-gray-200 bg-white">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-aa-text-dark">Pay-as-you-go (Monthly)</h2>
-            <p className="text-xs text-aa-gray">
-              Charges start only after free and prepaid tokens are used.
-            </p>
-            <p className="text-xs text-aa-gray">
-              A 12% maintenance charge is added at checkout.
-            </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-100 text-blue-700">
+              <FontAwesomeIcon icon={faBolt} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-aa-text-dark">Pay-as-you-go (Monthly)</h2>
+              <p className="text-xs text-aa-gray">
+                Charges start only after free and prepaid tokens are used.
+              </p>
+              <p className="text-xs text-aa-gray">
+                A 12% maintenance charge is added at checkout.
+              </p>
+            </div>
           </div>
           <Badge variant={paygDue > 0 ? 'orange' : 'green'}>
             {paygDue > 0 ? 'Payment Due' : 'All Paid'}
           </Badge>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-aa-gray">This Month</p>
-            <div className="mt-2 space-y-2 text-sm text-aa-text-dark">
+        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-aa-gray">This Month</p>
+            <div className="mt-3 space-y-2 text-sm text-aa-text-dark">
               <p>
                 Input tokens: <span className="font-semibold">{monthlyPayg.month_input_tokens || 0}</span>
               </p>
               <p>
                 Output tokens: <span className="font-semibold">{monthlyPayg.month_output_tokens || 0}</span>
               </p>
-              <p>
+              <p className="text-base">
                 Estimated cost: <span className="font-semibold">{formatInr(monthlyPayg.month_cost_inr || 0)}</span>
               </p>
             </div>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-aa-gray">Total Due</p>
-            <div className="mt-2 space-y-2 text-sm text-aa-text-dark">
-              <p className="text-base">
-                {formatInr(paygDue)}
-              </p>
+          <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-aa-gray">Total Due</p>
+            <div className="mt-3 space-y-2 text-sm text-aa-text-dark">
+              <p className="text-2xl font-semibold">{formatInr(paygDue)}</p>
               <p className="text-xs text-aa-gray">Includes service + Razorpay fees.</p>
             </div>
           </div>
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-aa-gray">Actions</p>
-            <div className="mt-2 flex flex-col gap-2">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-aa-gray">Actions</p>
+            <div className="mt-3 flex flex-col gap-2">
               <Button
                 variant="primary"
                 onClick={createPaygPaymentLink}
@@ -694,23 +722,28 @@ export default function BillingPage() {
       </Card>
 
       <Card className="border border-gray-200 bg-white">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-aa-text-dark">Prepaid Token Top-up</h2>
-            <p className="text-xs text-aa-gray">
-              Minimum top-up is ₹{summary?.prepaid?.min_topup_inr || 500}. Split 50/50 between input and output.
-            </p>
-            <p className="mt-1 text-xs text-aa-gray">
-              Pricing uses the current plan rates for input and output tokens.
-            </p>
-            <p className="mt-1 text-xs text-aa-gray">
-              A 12% maintenance charge is added at checkout.
-            </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+              <FontAwesomeIcon icon={faWallet} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-aa-text-dark">Prepaid Token Top-up</h2>
+              <p className="text-xs text-aa-gray">
+                Minimum top-up is ₹{summary?.prepaid?.min_topup_inr || 500}. Split 50/50 between input and output.
+              </p>
+              <p className="mt-1 text-xs text-aa-gray">
+                Pricing uses the current plan rates for input and output tokens.
+              </p>
+              <p className="mt-1 text-xs text-aa-gray">
+                A 12% maintenance charge is added at checkout.
+              </p>
+            </div>
           </div>
         </div>
 
-          <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
             <Input
               label="Top-up Amount (INR)"
               type="number"
@@ -724,23 +757,29 @@ export default function BillingPage() {
             </p>
             <p className="mt-1 text-xs text-aa-gray">GST will be added by the payment gateway if applicable.</p>
           </div>
-            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-aa-gray">Estimated Tokens</p>
-              <div className="mt-2 space-y-2 text-sm text-aa-text-dark">
-                <p>
-                  Input: <span className="font-semibold">{prepaidEstimate.inputTokens || 0}</span>
+          <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-aa-gray">Estimated Tokens</p>
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-gray-100 bg-white p-3">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-aa-gray">Input</p>
+                <p className="mt-1 text-lg font-semibold text-aa-text-dark">
+                  {prepaidEstimate.inputTokens || 0}
                 </p>
-                <p>
-                  Output: <span className="font-semibold">{prepaidEstimate.outputTokens || 0}</span>
-                </p>
-                <p className="text-xs text-aa-gray">
-                  Calculated using your current pricing. This estimate updates if pricing changes.
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-3">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-aa-gray">Output</p>
+                <p className="mt-1 text-lg font-semibold text-aa-text-dark">
+                  {prepaidEstimate.outputTokens || 0}
                 </p>
               </div>
             </div>
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-aa-gray">Actions</p>
-            <div className="mt-2 flex flex-col gap-2">
+            <p className="mt-3 text-xs text-aa-gray">
+              Calculated using your current pricing. This estimate updates if pricing changes.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-200 bg-gray-50/70 p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-aa-gray">Actions</p>
+            <div className="mt-3 flex flex-col gap-2">
               <Button
                 variant="primary"
                 onClick={createPrepaidPaymentLink}
@@ -768,11 +807,16 @@ export default function BillingPage() {
 
       <Card className="border border-gray-200 bg-white">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-aa-text-dark">Dashboard Charges</h2>
-            <p className="text-xs text-aa-gray">
-              Set monthly dashboard pricing and control who gets charged.
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-100 text-indigo-700">
+              <FontAwesomeIcon icon={faCreditCard} />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-aa-text-dark">Dashboard Charges</h2>
+              <p className="text-xs text-aa-gray">
+                Set monthly dashboard pricing and control who gets charged.
+              </p>
+            </div>
           </div>
         </div>
 
@@ -878,82 +922,140 @@ export default function BillingPage() {
           </div>
         ) : (
           <div className="mt-4 space-y-4">
-            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <p className="text-xs uppercase tracking-wide text-aa-gray">Your Plan</p>
-              <div className="mt-2 space-y-2 text-sm text-aa-text-dark">
-                <p>Profile: <span className="font-semibold">{dashboardTypeLabel}</span></p>
-                <p>Base charge: <span className="font-semibold">{formatInr(dashboardAmounts.base_inr || 0)}</span></p>
-                {dashboardProfile.booking_enabled && (
-                  <p>Booking add-on: <span className="font-semibold">{formatInr(dashboardAmounts.booking_inr || 0)}</span></p>
-                )}
-                <p>Total: <span className="font-semibold">{formatInr(dashboardAmounts.total_inr || 0)}</span></p>
-                {dashboardChargeEnabled ? (
-                  <p>
-                    Subscription:{' '}
-                    <span className="font-semibold">
-                      {dashboardSubscription?.active ? 'Active' : 'Expired'}
-                    </span>
-                    {dashboardSubscription?.expires_at && (
-                      <span className="text-xs text-aa-gray">
-                        {' '}
-                        ({dashboardSubscription?.active ? 'renews by' : 'expired on'}{' '}
-                        {new Date(dashboardSubscription.expires_at).toLocaleString('en-IN')})
-                      </span>
-                    )}
-                  </p>
-                ) : (
-                  <p className="text-xs text-aa-gray">Dashboard charges are currently disabled for you.</p>
-                )}
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.2em] text-aa-gray">Your Plan</p>
+                  <p className="text-sm text-aa-text-dark">Current dashboard billing summary.</p>
+                </div>
+                <Badge variant={dashboardChargeEnabled ? (dashboardSubscription?.active ? 'green' : 'orange') : 'default'}>
+                  {dashboardChargeEnabled
+                    ? dashboardSubscription?.active
+                      ? 'Active'
+                      : 'Expired'
+                    : 'Disabled'}
+                </Badge>
               </div>
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-[0.18em] text-aa-gray">Profile</span>
+                  <span className="font-semibold text-aa-text-dark">{dashboardTypeLabel}</span>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-[0.18em] text-aa-gray">Base charge</span>
+                  <span className="font-semibold text-aa-text-dark">{formatInr(dashboardAmounts.base_inr || 0)}</span>
+                </div>
+                {dashboardProfile.booking_enabled && (
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 flex items-center justify-between">
+                    <span className="text-xs uppercase tracking-[0.18em] text-aa-gray">Booking add-on</span>
+                    <span className="font-semibold text-aa-text-dark">{formatInr(dashboardAmounts.booking_inr || 0)}</span>
+                  </div>
+                )}
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 flex items-center justify-between">
+                  <span className="text-xs uppercase tracking-[0.18em] text-aa-gray">Total</span>
+                  <span className="font-semibold text-aa-text-dark">{formatInr(dashboardAmounts.total_inr || 0)}</span>
+                </div>
+              </div>
+              {dashboardChargeEnabled ? (
+                <p className="mt-3 text-xs text-aa-gray">
+                  Subscription {dashboardSubscription?.active ? 'renews by' : 'expired on'}{' '}
+                  {dashboardSubscription?.expires_at
+                    ? new Date(dashboardSubscription.expires_at).toLocaleString('en-IN')
+                    : 'N/A'}
+                </p>
+              ) : (
+                <p className="mt-3 text-xs text-aa-gray">Dashboard charges are currently disabled for you.</p>
+              )}
             </div>
 
             {dashboardChargeEnabled && (
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                <p className="text-xs uppercase tracking-wide text-aa-gray">Renew Dashboard Access</p>
-                <p className="mt-1 text-xs text-aa-gray">
-                  Choose a plan length. Longer plans unlock discounts.
-                </p>
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-4">
-                  {dashboardOfferOptions.map((option) => {
-                    const isSelected = option.months === selectedDashboardMonths;
-                    return (
-                      <button
-                        key={`dashboard-offer-${option.months}`}
-                        type="button"
-                        onClick={() => setDashboardMonths(String(option.months))}
-                        className={`rounded-xl border px-3 py-3 text-left text-sm transition ${
-                          isSelected
-                            ? 'border-aa-orange bg-aa-orange/10 text-aa-text-dark'
-                            : 'border-gray-200 bg-white text-aa-gray hover:border-aa-orange/60'
-                        }`}
-                      >
-                        <div className="font-semibold">{option.label}</div>
-                        <div className="text-xs text-aa-gray">
-                          {option.discount ? `${option.discount}% off` : 'Standard'}
+                <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-6">
+                  <div className="flex-1">
+                    <p className="text-xs uppercase tracking-[0.28em] text-aa-gray">
+                      Renew Dashboard Access
+                    </p>
+                    <p className="mt-1 text-sm text-aa-text-dark">
+                      Choose a plan length. Longer plans unlock discounts.
+                    </p>
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+                          {dashboardOfferOptions.map((option) => {
+                            const isSelected = option.months === selectedDashboardMonths;
+                            return (
+                              <button
+                                key={`dashboard-offer-${option.months}`}
+                                type="button"
+                                onClick={() => setDashboardMonths(String(option.months))}
+                                className={`group rounded-2xl border px-4 py-4 text-left text-sm transition ${
+                                  isSelected
+                                    ? 'border-aa-orange bg-white text-aa-text-dark shadow-[0_12px_30px_rgba(255,107,53,0.15)]'
+                                    : 'border-gray-200 bg-white text-aa-gray hover:border-aa-orange/60 hover:text-aa-text-dark'
+                                }`}
+                              >
+                                <div className="flex flex-col items-center text-center gap-2">
+                                  <div className="text-base font-semibold">{option.label}</div>
+                                  <span
+                                    className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                                      option.discount
+                                        ? 'bg-amber-100 text-amber-700'
+                                        : 'bg-gray-100 text-gray-500'
+                                    }`}
+                                  >
+                                    {option.discount ? `${option.discount}% off` : 'Standard'}
+                                  </span>
+                                  <div className="text-xs text-aa-gray">
+                                    {option.months === 1 ? 'Pay monthly' : `Billed once for ${option.months} months`}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="mt-3 grid grid-cols-1 gap-2 text-xs text-aa-gray sm:grid-cols-4">
-                  <span>Base: {formatInr(dashboardBaseTotal)}</span>
-                  <span>Discount: {formatInr(dashboardDiscountAmount)}</span>
-                  <span>Maintenance ({maintenancePct}%): {formatInr(dashboardMaintenanceFee)}</span>
-                  <span className="font-semibold text-aa-text-dark">Total: {formatInr(dashboardTotalDue)}</span>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-3">
-                  <Button
-                    variant="primary"
-                    onClick={createDashboardPaymentLink}
-                    disabled={dashboardMonthlyCharge <= 0}
-                  >
-                    Pay Subscription
-                  </Button>
-                  {dashboardMonthlyCharge <= 0 && (
-                    <span className="text-xs text-aa-gray">
-                      Dashboard rates are not configured yet.
-                    </span>
-                  )}
+                  </div>
+                  <div className="w-full lg:w-auto lg:min-w-[320px]">
+                    <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                      <p className="text-xs uppercase tracking-[0.28em] text-aa-gray">Summary</p>
+                      <div className="mt-3 space-y-2 text-sm text-aa-text-dark">
+                        <div className="flex items-center justify-between">
+                          <span className="text-aa-gray">Base</span>
+                          <span className="font-semibold">{formatInr(dashboardBaseTotal)}</span>
+                        </div>
+                        {dashboardBookingTotal > 0 && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-aa-gray">Booking add-on</span>
+                            <span className="font-semibold">{formatInr(dashboardBookingTotal)}</span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between">
+                          <span className="text-aa-gray">Discount</span>
+                          <span className="font-semibold text-emerald-600">
+                            -{formatInr(dashboardDiscountAmount)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-aa-gray">Maintenance ({maintenancePct}%)</span>
+                          <span className="font-semibold">{formatInr(dashboardMaintenanceFee)}</span>
+                        </div>
+                        <div className="border-t border-gray-100 pt-3 flex items-center justify-between text-base">
+                          <span className="font-semibold text-aa-text-dark">Total</span>
+                          <span className="font-semibold text-aa-text-dark">{formatInr(dashboardTotalDue)}</span>
+                        </div>
+                      </div>
+                      <Button
+                        variant="primary"
+                        onClick={createDashboardPaymentLink}
+                        disabled={dashboardMonthlyCharge <= 0}
+                        className="mt-4 w-full"
+                      >
+                        Pay Subscription
+                      </Button>
+                      {dashboardMonthlyCharge <= 0 && (
+                        <p className="mt-2 text-xs text-aa-gray">
+                          Dashboard rates are not configured yet.
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

@@ -255,6 +255,15 @@ export default function Navbar({ onMenuClick }) {
           }`}
           data-testid="whatsapp-status"
         >
+          <span
+            className={`h-2.5 w-2.5 rounded-full ${
+              restrictedMode
+                ? 'bg-gray-400'
+                : whatsappConnected
+                ? 'bg-green-500 aa-pulse-soft'
+                : 'bg-red-500'
+            }`}
+          />
           {restrictedMode ? (
             <FontAwesomeIcon icon={faBan} style={{ fontSize: 16 }} />
           ) : whatsappConnected ? (

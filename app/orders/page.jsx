@@ -255,6 +255,8 @@ export default function OrdersPage() {
 
   const restrictedMode = isRestrictedModeUser(user);
   const hasOrderAccess = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
+  const businessTypeCta =
+    user?.admin_tier === 'super_admin' ? 'Update Business Type' : 'Request Business Type Change';
 
   useEffect(() => {
     if (!syncWarning) return;
@@ -702,7 +704,7 @@ export default function OrdersPage() {
           </p>
           <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
             <Button variant="primary" onClick={() => router.push('/settings')}>
-              Update Business Type
+              {businessTypeCta}
             </Button>
             <Button variant="outline" onClick={() => router.push('/catalog')}>
               View Products & Services

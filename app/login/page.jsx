@@ -23,6 +23,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [pricing, setPricing] = useState(null);
+  const [pricingError, setPricingError] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
@@ -43,6 +45,44 @@ export default function LoginPage() {
       router.push('/dashboard');
     }
   }, [authLoading, user, router]);
+
+  useEffect(() => {
+    let active = true;
+    const loadPricing = async () => {
+      try {
+        const response = await fetch('/api/public/pricing');
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload?.error || 'Failed to load pricing');
+        if (active) setPricing(payload?.data || null);
+      } catch (err) {
+        if (active) setPricingError(err.message || 'Failed to load pricing');
+      }
+    };
+    loadPricing();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const formatInr = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return '—';
+    try {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0,
+      }).format(num);
+    } catch (_err) {
+      return `₹${num.toFixed(0)}`;
+    }
+  };
+
+  const formatPrice = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num <= 0) return 'Contact';
+    return formatInr(num);
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -230,6 +270,35 @@ export default function LoginPage() {
                 </div>
               ))}
             </div>
+            <div className="mt-10 rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
+                Pricing
+              </p>
+              {!pricing && !pricingError ? (
+                <p className="mt-3 text-sm text-white/80">Loading pricing…</p>
+              ) : pricing ? (
+                <div className="mt-4 space-y-3 text-sm text-white/90">
+                  <div className="flex items-center justify-between">
+                    <span>Product-based</span>
+                    <span className="font-semibold">{formatPrice(pricing.product_inr)}/mo</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Service-based</span>
+                    <span className="font-semibold">{formatPrice(pricing.service_inr)}/mo</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Product + Service</span>
+                    <span className="font-semibold">{formatPrice(pricing.both_inr)}/mo</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-white/70">
+                    <span>Booking add-on</span>
+                    <span>{formatPrice(pricing.booking_inr)}/mo</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-white/80">Pricing unavailable.</p>
+              )}
+            </div>
           </div>
         </aside>
 
@@ -330,6 +399,36 @@ export default function LoginPage() {
                   {loading ? 'Logging in...' : 'Login'}
                 </button>
               </form>
+
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:hidden">
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+                  Pricing
+                </p>
+                {!pricing && !pricingError ? (
+                  <p className="mt-2 text-sm text-slate-600">Loading pricing…</p>
+                ) : pricing ? (
+                  <div className="mt-3 space-y-2 text-sm text-slate-700">
+                    <div className="flex items-center justify-between">
+                      <span>Product-based</span>
+                      <span className="font-semibold">{formatPrice(pricing.product_inr)}/mo</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Service-based</span>
+                      <span className="font-semibold">{formatPrice(pricing.service_inr)}/mo</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Product + Service</span>
+                      <span className="font-semibold">{formatPrice(pricing.both_inr)}/mo</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>Booking add-on</span>
+                      <span>{formatPrice(pricing.booking_inr)}/mo</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-600">Pricing unavailable.</p>
+                )}
+              </div>
 
               <div className="my-5 flex items-center gap-3 aa-auth-reveal-up" style={{ animationDelay: '420ms' }}>
                 <div className="h-px flex-1 bg-slate-200" />

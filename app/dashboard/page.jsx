@@ -17,7 +17,17 @@ import {
 	Cell,
 } from 'recharts';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faMessage, faUsers, faCircleCheck, faCircleExclamation, faCalendarPlus, faCartShopping, faCalendarCheck } from '@fortawesome/free-solid-svg-icons';
+import {
+  faMessage,
+  faUsers,
+  faCircleCheck,
+  faCircleExclamation,
+  faCalendarPlus,
+  faCartShopping,
+  faCalendarCheck,
+  faCoins,
+  faClock,
+} from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import Loader from '../components/common/Loader.jsx';
 import { hasAppointmentAccess, hasProductAccess } from '../../lib/business.js';
@@ -131,6 +141,10 @@ export default function DashboardPage() {
 	async function fetchDashboardData() {
 		try {
 			const statsRes = await fetch('/api/dashboard/stats');
+			if (statsRes.status === 403) {
+				router.push('/billing');
+				return;
+			}
 			const statsData = await statsRes.json();
 			if (!statsRes.ok) {
 				throw new Error(statsData.error || 'Failed to fetch dashboard stats');
@@ -353,6 +367,71 @@ export default function DashboardPage() {
 	const recentMessages = messages.slice(0, 5);
   const showOrders = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
   const showAppointments = Boolean(user?.id) && (restrictedMode || hasAppointmentAccess(user));
+  const subscriptionExpiresAt =
+    billingSummary?.dashboard?.subscription?.expires_at ||
+    user?.dashboard_subscription_expires_at ||
+    null;
+  const accessGrantAt = user?.access_expires_at || null;
+  const freeUntilAt = billingSummary?.free_until || null;
+
+  const subscriptionDate = subscriptionExpiresAt ? new Date(subscriptionExpiresAt) : null;
+  const accessGrantDate = accessGrantAt ? new Date(accessGrantAt) : null;
+  const freeUntilDate = freeUntilAt ? new Date(freeUntilAt) : null;
+
+  const subscriptionTime =
+    subscriptionDate && !Number.isNaN(subscriptionDate.getTime())
+      ? subscriptionDate.toLocaleString()
+      : null;
+  const accessGrantTime =
+    accessGrantDate && !Number.isNaN(accessGrantDate.getTime())
+      ? accessGrantDate.toLocaleString()
+      : null;
+  const freeUntilTime =
+    freeUntilDate && !Number.isNaN(freeUntilDate.getTime())
+      ? freeUntilDate.toLocaleString()
+      : null;
+
+  const accessGrantActive =
+    user?.dashboard_access_grant_active === true ||
+    (accessGrantDate && !Number.isNaN(accessGrantDate.getTime()) && accessGrantDate.getTime() > Date.now());
+  const freeUntilActive =
+    user?.dashboard_free_until_active === true ||
+    (freeUntilDate && !Number.isNaN(freeUntilDate.getTime()) && freeUntilDate.getTime() > Date.now());
+
+  const subscriptionActive =
+    subscriptionDate && !Number.isNaN(subscriptionDate.getTime())
+      ? subscriptionDate.getTime() > Date.now()
+      : false;
+  const subscriptionStatus = accessGrantActive || freeUntilActive
+    ? 'Admin granted'
+    : subscriptionTime
+    ? subscriptionActive
+      ? 'Active plan'
+      : 'Expired plan'
+    : 'No plan';
+  const subscriptionStatusTone = accessGrantActive || freeUntilActive
+    ? 'bg-amber-100 text-amber-800'
+    : subscriptionActive
+    ? 'bg-emerald-100 text-emerald-800'
+    : subscriptionTime
+    ? 'bg-rose-100 text-rose-800'
+    : 'bg-gray-100 text-gray-700';
+  const accessWindowLabel = accessGrantActive
+    ? 'Access until'
+    : freeUntilActive
+    ? 'Free until'
+    : 'Access window';
+  const accessWindowValue = accessGrantActive || freeUntilActive
+    ? accessGrantTime || freeUntilTime || 'Active'
+    : 'Not granted';
+  const planExpiryValue = subscriptionTime
+    ? subscriptionActive
+      ? `Ends ${subscriptionTime}`
+      : `Ended ${subscriptionTime}`
+    : 'No active plan';
+  const accessNote = accessGrantActive || freeUntilActive
+    ? 'Granted access overrides payment until the date above.'
+    : 'Manage access in Billing or update the plan to stay active.';
 
 	return (
 		<div className="p-4 sm:p-6 space-y-6">
@@ -363,7 +442,7 @@ export default function DashboardPage() {
 			</div>
       {restrictedMode && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Account is pending super admin confirmation. Dashboard-only access is enabled.
+          Account access is limited. Contact your super admin or update billing to regain full access.
         </div>
       )}
 
@@ -473,34 +552,94 @@ export default function DashboardPage() {
 				</div>
 			</div>
 
-			{/* Token Snapshot */}
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-				<div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
-					<h3 className="text-lg font-bold text-gray-900">Token Snapshot</h3>
-					<p className="text-sm text-gray-600 mt-1">
-						Free tokens refresh monthly. Prepaid tokens never expire.
-					</p>
-					{billingLoading ? (
-						<p className="text-sm text-gray-500 mt-3">Loading token balances...</p>
-					) : billingSummary ? (
-						<div className="mt-3 space-y-2 text-sm text-gray-700">
-							<p>
-								Free input: <span className="font-semibold">{billingSummary.balances?.free_input_tokens || 0}</span>
-							</p>
-							<p>
-								Free output: <span className="font-semibold">{billingSummary.balances?.free_output_tokens || 0}</span>
-							</p>
-							<p>
-								Prepaid input: <span className="font-semibold">{billingSummary.balances?.paid_input_tokens || 0}</span>
-							</p>
-							<p>
-								Prepaid output: <span className="font-semibold">{billingSummary.balances?.paid_output_tokens || 0}</span>
-							</p>
-						</div>
-					) : (
-						<p className="text-sm text-gray-500 mt-3">Token data not available.</p>
-					)}
+			{/* Token Snapshot + Subscription */}
+			<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+				<div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,237,213,0.6),_transparent_55%)]" />
+          <div className="relative">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-gray-500">Token Snapshot</p>
+                <h3 className="text-lg font-semibold text-gray-900 mt-2">Usage credits</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Free tokens refresh monthly. Prepaid tokens never expire.
+                </p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                <FontAwesomeIcon icon={faCoins} />
+              </div>
+            </div>
+            {billingLoading ? (
+              <p className="text-sm text-gray-500 mt-4">Loading token balances...</p>
+            ) : billingSummary ? (
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm text-gray-700">
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-xs text-gray-500">Free input</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {billingSummary.balances?.free_input_tokens || 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-xs text-gray-500">Free output</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {billingSummary.balances?.free_output_tokens || 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-xs text-gray-500">Prepaid input</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {billingSummary.balances?.paid_input_tokens || 0}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                  <p className="text-xs text-gray-500">Prepaid output</p>
+                  <p className="text-lg font-semibold text-gray-900">
+                    {billingSummary.balances?.paid_output_tokens || 0}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 mt-4">Token data not available.</p>
+            )}
+          </div>
 				</div>
+
+        <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(219,234,254,0.6),_transparent_55%)]" />
+          <div className="relative">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-gray-500">Dashboard Subscription</p>
+                <h3 className="text-lg font-semibold text-gray-900 mt-2">Access window</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  Shows when the dashboard plan expires for this admin.
+                </p>
+              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 text-blue-700">
+                <FontAwesomeIcon icon={faClock} />
+              </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs uppercase tracking-[0.2em] text-gray-500">Status</p>
+                <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${subscriptionStatusTone}`}>
+                  {subscriptionStatus}
+                </span>
+              </div>
+              <div className="mt-3 grid gap-3 text-sm text-gray-700">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.18em] text-gray-500">{accessWindowLabel}</span>
+                  <span className="font-semibold text-gray-900">{accessWindowValue}</span>
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs uppercase tracking-[0.18em] text-gray-500">Plan expiry</span>
+                  <span className="font-semibold text-gray-900">{planExpiryValue}</span>
+                </div>
+              </div>
+              <p className="mt-3 text-xs text-gray-500">{accessNote}</p>
+            </div>
+          </div>
+        </div>
 			</div>
 
 			{/* Charts Row */}

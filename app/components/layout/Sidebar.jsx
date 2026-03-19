@@ -125,13 +125,14 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     ? 'w-[85vw] max-w-[300px] lg:w-20'
     : 'w-[85vw] max-w-[320px] lg:w-64';
   const translateClass = mobileOpen ? 'translate-x-0' : '-translate-x-full';
+  const motionClass = mobileOpen ? 'aa-slide-left' : '';
   const showLabels = !collapsed || mobileOpen;
   const compactDesktop = collapsed && !mobileOpen;
   const showBrandText = showLabels;
 
   return (
     <aside
-      className={`${widthClass} ${translateClass} lg:translate-x-0 bg-aa-dark-blue h-[100dvh] max-h-[100dvh] fixed left-0 top-0 flex flex-col z-50 overflow-hidden border-r border-white/10 shadow-[0_40px_120px_rgba(0,0,0,0.45)] transition-[transform,width] duration-300 ease-out`}
+      className={`${widthClass} ${translateClass} ${motionClass} lg:translate-x-0 bg-aa-dark-blue h-[100dvh] max-h-[100dvh] fixed left-0 top-0 flex flex-col z-50 overflow-hidden border-r border-white/10 shadow-[0_40px_120px_rgba(0,0,0,0.45)] transition-[transform,width] duration-300 ease-out`}
       data-testid="sidebar"
     >
       <div className="pointer-events-none absolute inset-0 opacity-70">
