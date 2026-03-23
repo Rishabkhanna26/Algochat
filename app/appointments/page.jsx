@@ -10,9 +10,9 @@ import {
   faTableColumns,
   faMoneyBillWave,
   faClock,
-  faPenToSquare,
   faCircleCheck,
   faBan,
+  faClipboardList,
   faCreditCard,
   faWallet,
   faBuildingColumns,
@@ -30,7 +30,6 @@ import GeminiSelect from '../components/common/GeminiSelect.jsx';
 import Loader from '../components/common/Loader.jsx';
 import { useToast } from '../components/common/ToastProvider.jsx';
 import {
-  getAppointmentCapabilityLabel,
   getBusinessTypeLabel,
   hasAppointmentAccess,
   hasBookingAccess,
@@ -104,8 +103,40 @@ export default function AppointmentsPage() {
     user?.admin_tier === 'super_admin' ? 'Update Business Type' : 'Request Business Type Change';
   const canUseServiceAppointments = Boolean(user?.id) && (restrictedMode || hasServiceAccess(user));
   const canUseBookingAppointments = Boolean(user?.id) && (restrictedMode || hasBookingAccess(user));
-  const label = useMemo(() => 'Appointments', []);
+  const requestedKind = String(searchParams?.get('kind') || '').trim().toLowerCase();
+  const normalizedRequestedKind = requestedKind === 'booking' || requestedKind === 'service'
+    ? requestedKind
+    : '';
+  const defaultKind = canUseBookingAppointments ? 'booking' : 'service';
+  const viewKind = normalizedRequestedKind || defaultKind;
+  const hasViewAccess = viewKind === 'booking' ? canUseBookingAppointments : canUseServiceAppointments;
+  const label = viewKind === 'booking' ? 'Bookings' : 'Service Orders';
   const labelLower = label.toLowerCase();
+  const isServiceView = viewKind === 'service';
+  const headerWrapperClass = isServiceView
+    ? 'mb-6 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-slate-50 p-4 shadow-sm'
+    : 'mb-6';
+  const headerIcon = isServiceView ? faClipboardList : faCalendarCheck;
+  const headerIconClass = isServiceView ? 'text-emerald-600' : 'text-aa-orange';
+  const headerTitleClass = isServiceView ? 'text-slate-900' : 'text-gray-900';
+  const createButtonClass = isServiceView ? 'bg-emerald-600 hover:bg-emerald-700' : '';
+  const searchFocusClass = isServiceView
+    ? 'focus:ring-emerald-400 focus:border-emerald-400'
+    : 'focus:ring-aa-orange focus:border-aa-orange';
+  const statusCardClass = isServiceView
+    ? 'rounded-xl border border-emerald-100 bg-white/80 shadow-[0_10px_24px_rgba(16,185,129,0.08)]'
+    : 'rounded-xl border border-gray-200 bg-white';
+  const listCardClass = isServiceView
+    ? 'bg-white/90 p-4 rounded-xl border border-emerald-100 shadow-[0_10px_24px_rgba(16,185,129,0.08)] hover:shadow-[0_14px_30px_rgba(16,185,129,0.16)] transition'
+    : 'bg-white p-4 rounded-xl border border-gray-200 hover:shadow-md transition';
+  const boardColumnClass = isServiceView
+    ? 'p-4 bg-emerald-50/60 border border-emerald-100'
+    : 'p-4 bg-gray-50/60 border border-gray-200';
+  const boardItemClass = isServiceView
+    ? 'rounded-xl border border-emerald-100 bg-white p-4 shadow-[0_8px_20px_rgba(16,185,129,0.08)]'
+    : 'rounded-xl border border-gray-200 bg-white p-4';
+  const showServiceToggle = viewKind === 'service' && canUseServiceAppointments;
+  const showBookingToggle = viewKind === 'booking' && canUseBookingAppointments;
   const contactOptions = useMemo(
     () => [
       { value: '', label: 'Select existing contact' },
@@ -118,15 +149,21 @@ export default function AppointmentsPage() {
   );
 
   useEffect(() => {
-    if (!hasAppointmentsAccess) {
+    if (!hasAppointmentsAccess || !hasViewAccess) {
       setLoading(false);
       return undefined;
     }
     const handle = setTimeout(() => {
-      fetchAppointments({ reset: true, nextOffset: 0, searchTerm: search, status: filterStatus });
+      fetchAppointments({
+        reset: true,
+        nextOffset: 0,
+        searchTerm: search,
+        status: filterStatus,
+        kind: viewKind,
+      });
     }, 300);
     return () => clearTimeout(handle);
-  }, [filterStatus, hasAppointmentsAccess, search]);
+  }, [filterStatus, hasAppointmentsAccess, hasViewAccess, search, viewKind]);
 
   useEffect(() => {
     if (autoOpened) return;
@@ -203,7 +240,7 @@ export default function AppointmentsPage() {
           credentials: 'include',
         }),
       ];
-      if (canUseBookingAppointments) {
+      if (viewKind === 'booking' && canUseBookingAppointments) {
         requests.push(
           fetch('/api/bookings?status=active&limit=500', {
             credentials: 'include',
@@ -242,6 +279,7 @@ export default function AppointmentsPage() {
     nextOffset = 0,
     searchTerm = '',
     status = 'all',
+    kind = viewKind,
     silent = false,
     limit = null,
   } = {}) {
@@ -264,6 +302,7 @@ export default function AppointmentsPage() {
       params.set('offset', String(nextOffset));
       if (searchTerm) params.set('q', searchTerm);
       if (status && status !== 'all') params.set('status', status);
+      if (kind) params.set('kind', kind);
       const response = await fetch(`/api/appointments?${params.toString()}`, {
         credentials: 'include',
         cache: 'no-store',
@@ -295,7 +334,7 @@ export default function AppointmentsPage() {
   }
 
   useEffect(() => {
-    if (!hasAppointmentsAccess || !user?.id) return undefined;
+    if (!hasAppointmentsAccess || !hasViewAccess || !user?.id) return undefined;
 
     const refreshAppointments = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
@@ -313,6 +352,7 @@ export default function AppointmentsPage() {
         nextOffset: 0,
         searchTerm: search,
         status: filterStatus,
+        kind: viewKind,
         silent: true,
         limit: liveLimit,
       });
@@ -340,10 +380,12 @@ export default function AppointmentsPage() {
     editSaving,
     filterStatus,
     hasAppointmentsAccess,
+    hasViewAccess,
     loadingMore,
     search,
     updatingId,
     user?.id,
+    viewKind,
   ]);
 
   async function updateStatus(appointmentId, status) {
@@ -370,14 +412,18 @@ export default function AppointmentsPage() {
       setAppointments((prev) =>
         prev.map((appt) => (appt.id === appointmentId ? data.data : appt))
       );
-      pushToast({ type: 'success', title: 'Saved', message: 'Appointment updated.' });
+      pushToast({
+        type: 'success',
+        title: 'Saved',
+        message: `${label.slice(0, -1)} updated.`,
+      });
     } catch (error) {
       console.error('Failed to update appointment:', error);
       setAppointments(previous);
       pushToast({
         type: 'error',
         title: 'Not saved',
-        message: error.message || 'Failed to update appointment.',
+        message: error.message || `Failed to update ${labelLower.slice(0, -1)}.`,
       });
     } finally {
       setUpdatingId(null);
@@ -469,8 +515,7 @@ export default function AppointmentsPage() {
   };
 
   const getDefaultAppointmentKind = () => {
-    if (canUseBookingAppointments && !canUseServiceAppointments) return 'booking';
-    return 'service';
+    return viewKind;
   };
 
   const toInputNumber = (value) => {
@@ -773,7 +818,7 @@ export default function AppointmentsPage() {
       }
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to update appointment');
+        throw new Error(data.error || `Failed to update ${labelLower.slice(0, -1)}`);
       }
       if (editMode === 'create') {
         await fetchAppointments({ reset: true, nextOffset: 0, searchTerm: search, status: filterStatus });
@@ -784,10 +829,12 @@ export default function AppointmentsPage() {
       pushToast({
         type: 'success',
         title: 'Saved',
-        message: editMode === 'create' ? 'Appointment created.' : 'Appointment updated.',
+        message: editMode === 'create'
+          ? `${label.slice(0, -1)} created.`
+          : `${label.slice(0, -1)} updated.`,
       });
     } catch (error) {
-      setEditError(error.message || 'Failed to save appointment');
+      setEditError(error.message || `Failed to save ${labelLower.slice(0, -1)}`);
     } finally {
       setEditSaving(false);
     }
@@ -973,12 +1020,17 @@ export default function AppointmentsPage() {
     return columns.filter((col) => col.key === filterStatus);
   }, [filterStatus]);
 
+  const visibleAppointments = useMemo(() => {
+    if (!viewKind) return appointments;
+    return appointments.filter((appt) => getAppointmentKind(appt) === viewKind);
+  }, [appointments, viewKind]);
+
   const appointmentsByStatus = useMemo(() => {
     const grouped = {};
     statusColumns.forEach((col) => {
       grouped[col.key] = [];
     });
-    appointments.forEach((appt) => {
+    visibleAppointments.forEach((appt) => {
       const key = appt.status || 'booked';
       if (!grouped[key]) {
         grouped[key] = [];
@@ -986,29 +1038,49 @@ export default function AppointmentsPage() {
       grouped[key].push(appt);
     });
     return grouped;
-  }, [appointments, statusColumns]);
+  }, [statusColumns, visibleAppointments]);
 
   const statusSummary = useMemo(() => {
     const base = { booked: 0, completed: 0, cancelled: 0 };
-    appointments.forEach((appt) => {
+    visibleAppointments.forEach((appt) => {
       const key = appt.status || 'booked';
       if (base[key] !== undefined) {
         base[key] += 1;
       }
     });
     return base;
-  }, [appointments]);
+  }, [visibleAppointments]);
 
-  if (!hasAppointmentsAccess) {
+  const statusCards = isServiceView
+    ? [
+        { key: 'booked', label: 'Booked', tone: 'bg-emerald-100 text-emerald-800', count: statusSummary.booked },
+        { key: 'completed', label: 'Completed', tone: 'bg-indigo-100 text-indigo-800', count: statusSummary.completed },
+        { key: 'cancelled', label: 'Cancelled', tone: 'bg-rose-100 text-rose-800', count: statusSummary.cancelled },
+      ]
+    : [
+        { key: 'booked', label: 'Booked', tone: 'bg-blue-50 text-blue-800', count: statusSummary.booked },
+        { key: 'completed', label: 'Completed', tone: 'bg-green-50 text-green-800', count: statusSummary.completed },
+        { key: 'cancelled', label: 'Cancelled', tone: 'bg-gray-50 text-gray-700', count: statusSummary.cancelled },
+      ];
+
+  if (!hasAppointmentsAccess || !hasViewAccess) {
     return (
       <div className="space-y-6">
         <Card className="text-center">
           <div className="mx-auto w-16 h-16 rounded-2xl bg-aa-orange/10 flex items-center justify-center mb-4">
-            <FontAwesomeIcon icon={faCalendarCheck} className="text-aa-orange" style={{ fontSize: 28 }} />
+            <FontAwesomeIcon
+              icon={viewKind === 'service' ? faClipboardList : faCalendarCheck}
+              className={viewKind === 'service' ? 'text-emerald-600' : 'text-aa-orange'}
+              style={{ fontSize: 28 }}
+            />
           </div>
-          <h1 className="text-2xl font-bold text-aa-dark-blue mb-2">Appointments are not enabled</h1>
+          <h1 className="text-2xl font-bold text-aa-dark-blue mb-2">
+            {viewKind === 'booking' ? 'Bookings are not enabled' : 'Service orders are not enabled'}
+          </h1>
           <p className="text-aa-gray">
-            Appointments are available for service-based businesses or admins with booking access.
+            {viewKind === 'booking'
+              ? 'Bookings are available for admins with booking access.'
+              : 'Service orders are available for service-based businesses.'}
             Your current business type is <span className="font-semibold">{getBusinessTypeLabel(user)}</span>.
           </p>
           <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
@@ -1026,24 +1098,20 @@ export default function AppointmentsPage() {
 
   return (
     <div className="p-4 sm:p-6">
-      <div className="mb-6">
+      <div className={headerWrapperClass}>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
-            <FontAwesomeIcon icon={faCalendarCheck} className="text-aa-orange" style={{ fontSize: 32 }} />
+          <h1 className={`text-2xl sm:text-3xl font-bold flex items-center gap-2 ${headerTitleClass}`}>
+            <FontAwesomeIcon icon={headerIcon} className={headerIconClass} style={{ fontSize: 32 }} />
             {label}
           </h1>
-          <Button variant="primary" onClick={openCreate}>
+          <Button variant="primary" onClick={openCreate} className={createButtonClass}>
             Create {label.slice(0, -1)}
           </Button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-          {[
-            { key: 'booked', label: 'Booked', tone: 'bg-blue-50 text-blue-800', count: statusSummary.booked },
-            { key: 'completed', label: 'Completed', tone: 'bg-green-50 text-green-800', count: statusSummary.completed },
-            { key: 'cancelled', label: 'Cancelled', tone: 'bg-gray-50 text-gray-700', count: statusSummary.cancelled },
-          ].map((item) => (
-            <div key={item.key} className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+          {statusCards.map((item) => (
+            <div key={item.key} className={`${statusCardClass} px-4 py-3`}>
               <p className="text-xs uppercase text-aa-gray font-semibold">{item.label}</p>
               <p className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${item.tone}`}>
                 {item.count}
@@ -1064,7 +1132,7 @@ export default function AppointmentsPage() {
               placeholder={`Search ${labelLower} by name, phone, type...`}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
+              className={`w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 ${searchFocusClass}`}
             />
           </div>
           <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -1119,83 +1187,90 @@ export default function AppointmentsPage() {
       </div>
 
       {viewMode === 'list' ? (
-        appointments.length === 0 ? (
+        visibleAppointments.length === 0 ? (
           loading ? (
             <div className="rounded-lg border border-dashed border-gray-200 bg-white py-10">
               <Loader size="sm" text={`Loading ${labelLower}...`} />
             </div>
           ) : (
             <div className="text-center py-12 bg-gray-50 rounded-lg">
-              <FontAwesomeIcon icon={faCalendarCheck} className="mx-auto text-gray-400 mb-2" style={{ fontSize: 48 }} />
+              <FontAwesomeIcon
+                icon={headerIcon}
+                className={isServiceView ? 'mx-auto text-emerald-300 mb-2' : 'mx-auto text-gray-400 mb-2'}
+                style={{ fontSize: 48 }}
+              />
               <p className="text-gray-500">No {labelLower} found</p>
             </div>
           )
         ) : (
           <div className="space-y-3">
-            {appointments.map((appt) => {
+            {visibleAppointments.map((appt) => {
               const nameMeta = getAppointmentNameMeta(appt);
               return (
                 <div
                   key={appt.id}
-                  className="bg-white p-4 rounded-xl border border-gray-200 hover:shadow-md transition"
+                  className={listCardClass}
                 >
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <h3 className="font-bold text-lg text-gray-900">{appt.user_name || 'Unknown'}</h3>
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(appt.status)}`}>
-                          {String(appt.status || 'booked').replace('_', ' ').toUpperCase()}
-                        </span>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold text-aa-text-dark">
+                          {appt.user_name || 'Unknown'}
+                        </h3>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-aa-gray">
+                          <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1">
+                            {appt.phone || '—'}
+                          </span>
+                          <span className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1">
+                            {appt.email || '—'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={getAppointmentKindVariant(appt)}>
-                          {getAppointmentKindLabel(appt).toUpperCase()}
+                          {getAppointmentKindLabel(appt)}
                         </Badge>
                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getPaymentBadge(getPaymentStatus(appt))}`}>
                           {getPaymentStatus(appt).toUpperCase()}
                         </span>
                       </div>
-                      <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                        <span>Phone: {appt.phone || '—'}</span>
-                        <span>Email: {appt.email || '—'}</span>
-                      </div>
-                      <p className="text-sm text-gray-700 mt-2">
-                        <span className="text-gray-500">{nameMeta.label}:</span>{' '}
-                        <span className={nameMeta.missing ? 'text-gray-400 italic' : 'text-gray-900'}>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                        <p className="text-xs uppercase font-semibold tracking-[0.18em] text-aa-gray">
+                          {nameMeta.label}
+                        </p>
+                        <p className={`mt-2 text-sm ${nameMeta.missing ? 'text-aa-gray italic' : 'text-aa-text-dark font-semibold'}`}>
                           {nameMeta.value}
-                        </span>
-                      </p>
-                      <div className="flex flex-wrap gap-4 text-sm mt-3">
-                        <span className="text-gray-500 flex items-center gap-2">
-                          <FontAwesomeIcon icon={faClock} />
-                          When: {getAppointmentWhenLabel(appt)}
-                        </span>
-                        {(() => {
-                          const summary = getPaymentSummary(appt);
-                          if (summary.total === null && summary.paid === null) return null;
-                          return (
-                            <span className="text-gray-500 flex items-center gap-2">
-                              <FontAwesomeIcon icon={faMoneyBillWave} />
-                              Paid {summary.paid ?? 0} / {summary.total ?? 0}
-                              {summary.due !== null ? ` • Due ${summary.due}` : ''}
-                            </span>
-                          );
-                        })()}
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                        <p className="text-xs uppercase font-semibold tracking-[0.18em] text-aa-gray">When</p>
+                        <p className="mt-2 text-sm text-aa-text-dark font-semibold">
+                          {getAppointmentWhenLabel(appt)}
+                        </p>
                       </div>
                     </div>
-                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:flex-nowrap xl:justify-end">
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      {(() => {
+                        const summary = getPaymentSummary(appt);
+                        if (summary.total === null && summary.paid === null) return null;
+                        return (
+                          <span className="text-xs text-aa-gray flex items-center gap-2">
+                            <FontAwesomeIcon icon={faMoneyBillWave} />
+                            Paid {summary.paid ?? 0} / {summary.total ?? 0}
+                            {summary.due !== null ? ` • Due ${summary.due}` : ''}
+                          </span>
+                        );
+                      })()}
                       {renderStatusSegmented(
                         appt.status || 'booked',
                         (value) => updateStatus(appt.id, value),
                         updatingId === appt.id,
                         'md'
                       )}
-                      <Button
-                        variant="outline"
-                        className="group w-full justify-center gap-2 px-3 py-2 text-sm sm:w-auto"
-                        onClick={() => openEdit(appt)}
-                      >
-                        <FontAwesomeIcon icon={faPenToSquare} />
-                        <span className="hidden sm:inline">Edit</span>
-                      </Button>
                     </div>
                   </div>
                 </div>
@@ -1206,7 +1281,7 @@ export default function AppointmentsPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {statusColumns.map((col) => (
-            <Card key={col.key} className="p-4 bg-gray-50/60 border border-gray-200">
+            <Card key={col.key} className={boardColumnClass}>
               <div className="flex items-center justify-between mb-4">
                 <div>
                   <p className="text-xs uppercase text-aa-gray font-semibold">{col.label}</p>
@@ -1230,7 +1305,7 @@ export default function AppointmentsPage() {
                   appointmentsByStatus[col.key].map((appt) => {
                     const nameMeta = getAppointmentNameMeta(appt);
                     return (
-                      <div key={appt.id} className="rounded-xl border border-gray-200 bg-white p-4">
+                      <div key={appt.id} className={boardItemClass}>
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="font-semibold text-aa-text-dark">{appt.user_name || 'Unknown'}</p>
@@ -1253,21 +1328,12 @@ export default function AppointmentsPage() {
                           </Badge>
                           <span>When: {getAppointmentWhenLabel(appt)}</span>
                         </div>
-                        <div className="mt-3 flex items-center justify-between gap-2">
+                        <div className="mt-3">
                           {renderStatusStacked(
                             appt.status || 'booked',
                             (value) => updateStatus(appt.id, value),
                             updatingId === appt.id
                           )}
-                          <button
-                            type="button"
-                            className="inline-flex items-center justify-center gap-2 rounded-full border border-aa-orange px-3 py-1 text-xs font-semibold text-aa-orange transition hover:bg-aa-orange hover:text-white"
-                            onClick={() => openEdit(appt)}
-                            aria-label="Edit appointment"
-                          >
-                            <FontAwesomeIcon icon={faPenToSquare} />
-                            <span className="hidden sm:inline">Edit</span>
-                          </button>
                         </div>
                       </div>
                     );
@@ -1377,7 +1443,7 @@ export default function AppointmentsPage() {
             <div>
               <label className="block text-sm font-semibold text-aa-text-dark mb-2">Record Type</label>
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {canUseServiceAppointments && (
+                {showServiceToggle && (
                   <button
                     type="button"
                     onClick={() => setEditForm((prev) => ({ ...prev, appointment_kind: 'service' }))}
@@ -1390,7 +1456,7 @@ export default function AppointmentsPage() {
                     Service
                   </button>
                 )}
-                {canUseBookingAppointments && (
+                {showBookingToggle && (
                   <button
                     type="button"
                     onClick={() => setEditForm((prev) => ({ ...prev, appointment_kind: 'booking' }))}
@@ -1405,11 +1471,11 @@ export default function AppointmentsPage() {
                 )}
               </div>
               <p className="mt-2 text-xs text-aa-gray">
-                This admin can currently use {getAppointmentCapabilityLabel(user)} records.
+                This view is limited to {viewKind === 'booking' ? 'booking' : 'service'} records.
               </p>
             </div>
             <Input
-              label={editForm.appointment_kind === 'booking' ? 'Booking Name' : 'Appointment Type'}
+              label={editForm.appointment_kind === 'booking' ? 'Booking Name' : 'Service Name'}
               value={editForm.appointment_type}
               onChange={handleEditChange('appointment_type')}
               placeholder={editForm.appointment_kind === 'booking' ? 'Deluxe Room' : 'Consultation'}

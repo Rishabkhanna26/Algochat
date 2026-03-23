@@ -22,20 +22,20 @@
 }
 
 :root[data-theme='dark'] {
-  --aa-dark-blue: 162 213 255;
-  --aa-orange: 255 145 45;
-  --aa-gold: 253 185 56;
-  --aa-light-bg: 8 14 26;
-  --aa-white: 17 27 44;
-  --aa-surface-soft: 22 34 54;
-  --aa-surface-muted: 30 45 67;
-  --aa-text-dark: 245 248 255;
-  --aa-gray: 184 198 219;
-  --aa-border: 77 98 132;
-  --aa-border-strong: 109 132 170;
-  --aa-info: 125 183 255;
-  --aa-success: 78 214 152;
-  --aa-danger: 255 128 122;
+  --aa-dark-blue: 124 173 255;
+  --aa-orange: 255 159 76;
+  --aa-gold: 255 198 90;
+  --aa-light-bg: 11 18 32;
+  --aa-white: 20 29 45;
+  --aa-surface-soft: 25 36 54;
+  --aa-surface-muted: 33 47 70;
+  --aa-text-dark: 230 237 249;
+  --aa-gray: 167 181 205;
+  --aa-border: 52 69 97;
+  --aa-border-strong: 73 94 126;
+  --aa-info: 138 190 255;
+  --aa-success: 96 220 166;
+  --aa-danger: 255 140 132;
   color-scheme: dark;
 }
 
@@ -117,9 +117,9 @@ table {
 
 :root[data-theme='dark'] body {
   background-image:
-    radial-gradient(circle at top left, rgb(var(--aa-orange) / 0.12), transparent 26%),
-    radial-gradient(circle at top right, rgb(var(--aa-dark-blue) / 0.16), transparent 34%),
-    linear-gradient(180deg, rgb(7 15 31), rgb(10 20 38));
+    radial-gradient(circle at top left, rgb(var(--aa-orange) / 0.16), transparent 30%),
+    radial-gradient(circle at top right, rgb(var(--aa-dark-blue) / 0.2), transparent 36%),
+    linear-gradient(180deg, rgb(9 16 30), rgb(16 26 44));
 }
 
 :root[data-theme='dark'] .bg-white {
@@ -208,6 +208,42 @@ table {
 
 :root[data-theme='dark'] .bg-red-500 {
   background-color: rgb(var(--aa-danger)) !important;
+}
+
+.aa-badge-booking {
+  background: rgb(var(--aa-info) / 0.18);
+  color: rgb(var(--aa-info));
+  border: 1px solid rgb(var(--aa-info) / 0.28);
+}
+
+.aa-badge-active {
+  background: rgb(var(--aa-success) / 0.2);
+  color: rgb(var(--aa-success));
+  border: 1px solid rgb(var(--aa-success) / 0.3);
+}
+
+.aa-badge-inactive {
+  background: rgb(var(--aa-gray) / 0.18);
+  color: rgb(var(--aa-gray));
+  border: 1px solid rgb(var(--aa-gray) / 0.3);
+}
+
+.aa-badge-category {
+  background: rgb(var(--aa-dark-blue) / 0.16);
+  color: rgb(var(--aa-dark-blue));
+  border: 1px solid rgb(var(--aa-dark-blue) / 0.24);
+}
+
+.aa-badge-paid {
+  background: rgb(var(--aa-orange) / 0.18);
+  color: rgb(var(--aa-orange));
+  border: 1px solid rgb(var(--aa-orange) / 0.32);
+}
+
+.aa-badge-free {
+  background: rgb(var(--aa-gold) / 0.2);
+  color: rgb(var(--aa-gold));
+  border: 1px solid rgb(var(--aa-gold) / 0.3);
 }
 
 :root[data-theme='dark'] .bg-yellow-50,

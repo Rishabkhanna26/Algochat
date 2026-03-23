@@ -647,6 +647,12 @@ export default function InboxPage() {
       null
     );
   }, [activeAppointments]);
+  const appointmentKindForLink = activeUpcomingAppointment
+    ? getAppointmentKind(activeUpcomingAppointment)
+    : activeAppointments[0]
+    ? getAppointmentKind(activeAppointments[0])
+    : 'booking';
+  const appointmentsLink = `/appointments?kind=${appointmentKindForLink}`;
   const appointmentReplyActions = useMemo(() => {
     const confirmSlotText = activeUpcomingAppointment
       ? `Your appointment is confirmed for ${formatDateTime(activeUpcomingAppointment.start_time)}.`
@@ -1398,7 +1404,7 @@ export default function InboxPage() {
                       </div>
                     ) : (
                       <p className="mt-2 text-[10px] text-gray-600 sm:mt-3 sm:text-xs">
-                        No appointment record was found for this contact yet.
+                        No {appointmentKindForLink === 'booking' ? 'booking' : 'service order'} record was found for this contact yet.
                       </p>
                     )}
                   </div>
@@ -1420,10 +1426,10 @@ export default function InboxPage() {
                       ))}
                     </div>
                     <a
-                      href="/appointments"
+                      href={appointmentsLink}
                       className="mt-2 inline-flex items-center text-[10px] font-semibold text-blue-600 hover:text-blue-700 sm:mt-3 sm:text-xs"
                     >
-                      Open appointments
+                      Open {appointmentKindForLink === 'booking' ? 'bookings' : 'service orders'}
                     </a>
                   </div>
 

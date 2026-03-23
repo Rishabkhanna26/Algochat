@@ -145,6 +145,12 @@ export default function SettingsPage() {
   const [billingAdmins, setBillingAdmins] = useState([]);
   const [billingAdminsLoading, setBillingAdminsLoading] = useState(false);
   const [billingAdminsStatus, setBillingAdminsStatus] = useState('');
+  const [freeDeliveryProducts, setFreeDeliveryProducts] = useState([]);
+  const [freeDeliveryLoading, setFreeDeliveryLoading] = useState(false);
+  const [freeDeliveryError, setFreeDeliveryError] = useState('');
+  const [freeDeliverySelection, setFreeDeliverySelection] = useState([]);
+  const [freeDeliverySearch, setFreeDeliverySearch] = useState('');
+  const [freeDeliveryTouched, setFreeDeliveryTouched] = useState(false);
   const restrictedMode = isRestrictedModeUser(user);
   const productAccess = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
 

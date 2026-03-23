@@ -25,15 +25,17 @@ import {
   faCalendarPlus,
   faCartShopping,
   faCalendarCheck,
+  faClipboardList,
   faCoins,
   faClock,
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import Loader from '../components/common/Loader.jsx';
-import { hasAppointmentAccess, hasProductAccess } from '../../lib/business.js';
-import { isRestrictedModeUser } from '../../lib/access.js';
+import { hasBookingAccess, hasProductAccess, hasServiceAccess } from '../../lib/business.js';
+import { isRestrictedModeUser, isSubscriptionExpired } from '../../lib/access.js';
 import GeminiSelect from '../components/common/GeminiSelect.jsx';
 import { useToast } from '../components/common/ToastProvider.jsx';
+import SubscriptionExpiredBanner from '../components/common/SubscriptionExpiredBanner.jsx';
 
 const OVERVIEW_METRICS = [
 	{ key: 'total_users', name: 'Users' },
@@ -41,7 +43,7 @@ const OVERVIEW_METRICS = [
 	{ key: 'active_requirements', name: 'Requirements' },
 	{ key: 'open_needs', name: 'Open Needs' },
 	{ key: 'total_orders', name: 'Orders' },
-	{ key: 'total_appointments', name: 'Appointments' },
+	{ key: 'total_appointments', name: 'Bookings' },
 ];
 
 const toCount = (value) => {
@@ -72,6 +74,7 @@ export default function DashboardPage() {
 	const { user } = useAuth();
 	const { pushToast } = useToast();
 	const restrictedMode = isRestrictedModeUser(user);
+	const subscriptionExpired = isSubscriptionExpired(user);
 	const [stats, setStats] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [messages, setMessages] = useState([]);
@@ -366,7 +369,8 @@ export default function DashboardPage() {
 
 	const recentMessages = messages.slice(0, 5);
   const showOrders = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
-  const showAppointments = Boolean(user?.id) && (restrictedMode || hasAppointmentAccess(user));
+  const showBookings = Boolean(user?.id) && (restrictedMode || hasBookingAccess(user));
+  const showServiceOrders = Boolean(user?.id) && (restrictedMode || hasServiceAccess(user));
   const subscriptionExpiresAt =
     billingSummary?.dashboard?.subscription?.expires_at ||
     user?.dashboard_subscription_expires_at ||
@@ -440,15 +444,21 @@ export default function DashboardPage() {
 				<h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Dashboard</h1>
 				<p className="text-gray-600 mt-2">Welcome back! Here&apos;s your business overview.</p>
 			</div>
-      {restrictedMode && (
+      {subscriptionExpired && (
+        <SubscriptionExpiredBanner 
+          subscriptionExpiresAt={user?.dashboard_subscription_expires_at}
+          showDismiss={true}
+        />
+      )}
+      {restrictedMode && !subscriptionExpired && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
           Account access is limited. Contact your super admin or update billing to regain full access.
         </div>
       )}
 
 			{/* Quick Actions */}
-			<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {showAppointments && (
+			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {showBookings && (
 				  <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition">
 					  <div className="flex items-start justify-between gap-4">
 						  <div>
@@ -460,7 +470,7 @@ export default function DashboardPage() {
 					  </div>
 					  <button
               disabled={restrictedMode}
-						  onClick={() => router.push('/appointments')}
+						  onClick={() => router.push('/appointments?kind=booking')}
 						  className="mt-4 w-full rounded-full border border-aa-orange text-aa-orange font-semibold px-4 py-2 hover:bg-aa-orange hover:text-white transition disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-aa-orange"
 					  >
 						  {restrictedMode ? 'Locked until approval' : 'Open bookings'}
@@ -468,22 +478,42 @@ export default function DashboardPage() {
 				  </div>
         )}
 
-        {showAppointments && (
+        {showBookings && (
 				  <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition">
 					  <div className="flex items-start justify-between gap-4">
 						  <div>
 							  <p className="text-xs uppercase text-gray-500 font-semibold">Create</p>
-							  <h3 className="text-lg font-bold text-gray-900 mt-2">Create appointment</h3>
-							  <p className="text-sm text-gray-600 mt-1">Add a new appointment in seconds.</p>
+							  <h3 className="text-lg font-bold text-gray-900 mt-2">Create booking</h3>
+							  <p className="text-sm text-gray-600 mt-1">Add a new booking in seconds.</p>
 						  </div>
 						  <FontAwesomeIcon icon={faCalendarPlus} className="text-green-500" style={{ fontSize: 32 }} />
 					  </div>
 					  <button
               disabled={restrictedMode}
-						  onClick={() => router.push('/appointments?new=1')}
+						  onClick={() => router.push('/appointments?new=1&kind=booking')}
 						  className="mt-4 w-full rounded-full bg-aa-dark-blue text-white font-semibold px-4 py-2 hover:bg-aa-dark-blue/90 transition disabled:cursor-not-allowed disabled:opacity-50"
 					  >
-						  {restrictedMode ? 'Locked until approval' : 'Create appointment'}
+						  {restrictedMode ? 'Locked until approval' : 'Create booking'}
+					  </button>
+				  </div>
+        )}
+
+        {showServiceOrders && (
+				  <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition">
+					  <div className="flex items-start justify-between gap-4">
+						  <div>
+							  <p className="text-xs uppercase text-gray-500 font-semibold">Services</p>
+							  <h3 className="text-lg font-bold text-gray-900 mt-2">Service orders</h3>
+							  <p className="text-sm text-gray-600 mt-1">Track booked services and payments.</p>
+						  </div>
+						  <FontAwesomeIcon icon={faClipboardList} className="text-blue-500" style={{ fontSize: 32 }} />
+					  </div>
+					  <button
+              disabled={restrictedMode}
+						  onClick={() => router.push('/appointments?kind=service')}
+						  className="mt-4 w-full rounded-full border border-aa-dark-blue text-aa-dark-blue font-semibold px-4 py-2 hover:bg-aa-dark-blue hover:text-white transition disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-aa-dark-blue"
+					  >
+						  {restrictedMode ? 'Locked until approval' : 'Open services'}
 					  </button>
 				  </div>
         )}

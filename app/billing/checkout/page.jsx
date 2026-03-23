@@ -35,6 +35,8 @@ export default function BillingCheckoutPage() {
   const type = rawType === 'payg' ? 'payg' : rawType === 'dashboard' ? 'dashboard' : 'prepaid';
   const amountParam = params.get('amount');
   const monthsParam = params.get('months');
+  const profileParam = params.get('profile');
+  const bookingParam = params.get('booking');
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -80,7 +82,31 @@ export default function BillingCheckoutPage() {
   const pricing = summary?.pricing || {};
   const maintenancePct = toNumber(pricing?.maintenance_fee_pct, 12);
   const dashboardChargeEnabled = summary?.dashboard?.charge_enabled !== false;
-  const dashboardMonthly = toNumber(summary?.dashboard?.amounts?.total_inr, 0);
+  const dashboardRates = summary?.dashboard?.rates || {};
+  const currentProfile = summary?.dashboard?.profile || {};
+  const normalizedProfileParam =
+    ['service', 'product', 'both'].includes(String(profileParam || '').trim().toLowerCase())
+      ? String(profileParam).trim().toLowerCase()
+      : null;
+  const selectedProfileType = normalizedProfileParam || currentProfile.business_type || 'both';
+  const selectedBookingEnabled = (() => {
+    if (bookingParam === null || bookingParam === undefined) {
+      return Boolean(currentProfile.booking_enabled);
+    }
+    const normalized = String(bookingParam).trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+    return Boolean(currentProfile.booking_enabled);
+  })();
+  const resolvedBookingEnabled = selectedProfileType === 'product' ? false : selectedBookingEnabled;
+  const dashboardBaseMonthly =
+    selectedProfileType === 'service'
+      ? toNumber(dashboardRates.service_inr, 0)
+      : selectedProfileType === 'product'
+      ? toNumber(dashboardRates.product_inr, 0)
+      : toNumber(dashboardRates.both_inr, 0);
+  const dashboardBookingMonthly = resolvedBookingEnabled ? toNumber(dashboardRates.booking_inr, 0) : 0;
+  const dashboardMonthly = dashboardChargeEnabled ? dashboardBaseMonthly + dashboardBookingMonthly : 0;
   const subscriptionMonthsRaw = Math.max(1, Math.trunc(Number(monthsParam) || 1));
   const subscriptionMonths = [1, 3, 6, 12].includes(subscriptionMonthsRaw) ? subscriptionMonthsRaw : 1;
   const subscriptionDiscountPct =
@@ -129,7 +155,11 @@ export default function BillingCheckoutPage() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               credentials: 'include',
-              body: JSON.stringify({ subscription_months: subscriptionMonths }),
+              body: JSON.stringify({
+                subscription_months: subscriptionMonths,
+                business_type: selectedProfileType,
+                booking_enabled: resolvedBookingEnabled,
+              }),
             })
           : await fetch('/api/payments/prepaid', {
               method: 'POST',
@@ -232,6 +262,13 @@ export default function BillingCheckoutPage() {
             {type === 'dashboard' && (
               <div className="mt-2 text-xs text-aa-gray">
                 Monthly: {formatInr(dashboardMonthly)} • Months: {subscriptionMonths} • Discount: {subscriptionDiscountPct}%
+                <div className="mt-1">
+                  Profile: {selectedProfileType === 'service'
+                    ? `${currentProfile.service_label || 'Service'}-based`
+                    : selectedProfileType === 'product'
+                    ? `${currentProfile.product_label || 'Product'}-based`
+                    : `${currentProfile.product_label || 'Product'} + ${currentProfile.service_label || 'Service'}`} • Booking: {resolvedBookingEnabled ? 'Yes' : 'No'}
+                </div>
               </div>
             )}
           </div>
@@ -248,6 +285,12 @@ export default function BillingCheckoutPage() {
             </p>
           </div>
         </div>
+
+        {type === 'dashboard' && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+            Profile changes selected here will be applied to your account once the payment is verified.
+          </div>
+        )}
 
         {type === 'prepaid' && (
           <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-aa-text-dark">

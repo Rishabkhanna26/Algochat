@@ -449,14 +449,18 @@ export default function BookingPage() {
               Manage rooms, tables, and other booking offers.
             </h1>
             <p className="mt-3 max-w-2xl text-sm text-aa-gray sm:text-base">
-              Anything added here stays in a separate Booking section, remains bookable, and can be marked as booking inside appointments.
+              Anything added here stays in a separate Booking section, remains bookable, and can be marked as booking inside booking records.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <Button variant="primary" icon={<FontAwesomeIcon icon={faPlus} />} onClick={openCreateModal}>
                 Add Booking Option
               </Button>
-              <Button variant="outline" icon={<FontAwesomeIcon icon={faCalendarCheck} />} onClick={() => router.push('/appointments')}>
-                Open Appointments
+              <Button
+                variant="outline"
+                icon={<FontAwesomeIcon icon={faCalendarCheck} />}
+                onClick={() => router.push('/appointments?kind=booking')}
+              >
+                Open Bookings
               </Button>
             </div>
           </div>
@@ -549,12 +553,24 @@ export default function BookingPage() {
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <h2 className="text-xl font-bold text-aa-dark-blue">{item.name}</h2>
-                          <Badge variant="yellow">Booking</Badge>
-                          <Badge variant={item.is_active ? 'green' : 'default'}>
+                          <Badge variant="default" className="aa-badge-booking">
+                            Booking
+                          </Badge>
+                          <Badge
+                            variant="default"
+                            className={item.is_active ? 'aa-badge-active' : 'aa-badge-inactive'}
+                          >
                             {item.is_active ? 'Active' : 'Inactive'}
                           </Badge>
-                          {item.category && <Badge variant="blue">{item.category}</Badge>}
-                          <Badge variant={item.payment_required ? 'orange' : 'green'}>
+                          {item.category && (
+                            <Badge variant="default" className="aa-badge-category">
+                              {item.category}
+                            </Badge>
+                          )}
+                          <Badge
+                            variant="default"
+                            className={item.payment_required ? 'aa-badge-paid' : 'aa-badge-free'}
+                          >
                             {item.payment_required ? 'Paid booking' : 'Free booking'}
                           </Badge>
                         </div>
@@ -620,17 +636,17 @@ export default function BookingPage() {
                     </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-aa-gray">
-                        Saved In Appointments
+                        Saved In Bookings
                       </p>
                       <p className="mt-2 text-sm text-aa-gray">
-                        New reservation requests for this item can be logged in appointments and marked as <span className="font-semibold text-aa-dark-blue">booking</span>.
+                        New reservation requests for this item can be logged in bookings and marked as <span className="font-semibold text-aa-dark-blue">booking</span>.
                       </p>
                       <button
                         type="button"
-                        onClick={() => router.push('/appointments')}
+                        onClick={() => router.push('/appointments?kind=booking')}
                         className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-aa-orange hover:text-aa-dark-blue"
                       >
-                        Review appointments
+                        Review bookings
                         <FontAwesomeIcon icon={faArrowRight} />
                       </button>
                     </div>

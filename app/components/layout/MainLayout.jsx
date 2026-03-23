@@ -25,9 +25,34 @@ export default function MainLayout({ children }) {
   const { user, loading } = useAuth();
   const restrictedMode = isRestrictedModeUser(user);
   const isBillingPath = pathname.startsWith('/billing');
-  const isSubscriptionRestricted =
+  const subscriptionExpired = user?.dashboard_subscription_expired === true;
+  const subscriptionInactive =
     user?.dashboard_charge_enabled &&
-    user?.dashboard_subscription_active === false;
+    user?.dashboard_subscription_active === false &&
+    !subscriptionExpired;
+  const accessExpired = Boolean(
+    user?.status && String(user.status).toLowerCase() !== 'active'
+  );
+
+  const restrictedTitle = accessExpired
+    ? 'Access period over.'
+    : subscriptionExpired
+    ? 'Subscription expired.'
+    : subscriptionInactive
+    ? 'Subscription inactive.'
+    : 'Account is in restricted mode.';
+
+  const restrictedMessage = accessExpired
+    ? 'Your access period is over. You can view your data but cannot update, delete, or create anything.'
+    : subscriptionExpired
+    ? 'Your subscription has expired. You can view your data but cannot update, delete, or create anything.'
+    : subscriptionInactive
+    ? 'Dashboard access requires an active subscription.'
+    : 'You can browse, but add/edit actions are disabled until access is restored.';
+
+  const restrictedActionNote = accessExpired || subscriptionExpired || subscriptionInactive
+    ? 'Please contact super admin to reactivate your account or purchase a subscription.'
+    : null;
 
   useEffect(() => {
     setSidebarOpen(false);
@@ -121,16 +146,11 @@ export default function MainLayout({ children }) {
             {restrictedMode && (
               <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="font-semibold">
-                    {isSubscriptionRestricted
-                      ? 'Dashboard subscription expired.'
-                      : 'Account is in restricted mode.'}
-                  </p>
-                  <p className="text-xs text-amber-700">
-                    {isSubscriptionRestricted
-                      ? 'Renew your dashboard plan to resume full access.'
-                      : 'You can browse, but add/edit actions are disabled until access is restored.'}
-                  </p>
+                  <p className="font-semibold">{restrictedTitle}</p>
+                  <p className="text-xs text-amber-700">{restrictedMessage}</p>
+                  {restrictedActionNote && (
+                    <p className="text-xs text-amber-700">{restrictedActionNote}</p>
+                  )}
                 </div>
                 {!isBillingPath && (
                   <Button variant="primary" onClick={() => router.push('/billing')}>

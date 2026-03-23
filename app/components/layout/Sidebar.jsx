@@ -19,6 +19,7 @@ import {
   faCartShopping,
   faWallet,
   faCreditCard,
+  faClipboardList,
   faChevronLeft,
   faChevronRight,
   faXmark,
@@ -27,9 +28,9 @@ import { useAuth } from '../auth/AuthProvider.jsx';
 import { filterMenuItems, isRestrictedModeUser } from '../../../lib/access.js';
 import {
   getCatalogLabel,
-  hasAppointmentAccess,
   hasBookingAccess,
   hasProductAccess,
+  hasServiceAccess,
 } from '../../../lib/business.js';
 
 export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClose }) {
@@ -39,7 +40,8 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   const [typeRequestCount, setTypeRequestCount] = useState(0);
   const restrictedMode = isRestrictedModeUser(user);
 
-  const showAppointments = Boolean(user?.id) && hasAppointmentAccess(user);
+  const showServiceOrders = Boolean(user?.id) && hasServiceAccess(user);
+  const showBookings = Boolean(user?.id) && hasBookingAccess(user);
   const showBooking = Boolean(user?.id) && hasBookingAccess(user);
   const showOrders = Boolean(user?.id) && hasProductAccess(user);
   const catalogLabel = getCatalogLabel(user);
@@ -122,9 +124,12 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     { name: 'Leads', icon: faUsers, path: '/contacts' },
     { name: catalogLabel, icon: faBoxOpen, path: '/catalog' },
     ...(showOrders ? [{ name: 'Orders', icon: faCartShopping, path: '/orders' }] : []),
+    ...(showServiceOrders
+      ? [{ name: 'Service Orders', icon: faClipboardList, path: '/appointments?kind=service' }]
+      : []),
     ...(showOrders ? [{ name: 'Revenue', icon: faWallet, path: '/revenue' }] : []),
-    ...(showAppointments ? [{ name: 'Appointments', icon: faCalendarCheck, path: '/appointments' }] : []),
-    ...(showBooking ? [{ name: 'Booking', icon: faHotel, path: '/booking' }] : []),
+    ...(showBookings ? [{ name: 'Client Bookings', icon: faCalendarCheck, path: '/appointments?kind=booking' }] : []),
+    ...(showBooking ? [{ name: 'Booking Catalog', icon: faHotel, path: '/booking' }] : []),
     { name: 'Reports', icon: faChartBar, path: '/reports' },
     { name: 'Billing', icon: faCreditCard, path: '/billing' },
     {
@@ -146,7 +151,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     if (name.includes('product') || name.includes('service') || ['orders', 'revenue'].includes(name)) {
       return 'commerce';
     }
-    if (['appointments', 'booking'].includes(name)) return 'schedule';
+    if (['appointments', 'booking', 'bookings'].includes(name)) return 'schedule';
     return 'system';
   };
 

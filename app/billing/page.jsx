@@ -97,6 +97,9 @@ export default function BillingPage() {
     product_label: '',
   });
   const [dashboardMonths, setDashboardMonths] = useState('1');
+  const [renewProfileType, setRenewProfileType] = useState('');
+  const [renewBookingEnabled, setRenewBookingEnabled] = useState(false);
+  const [renewProfileTouched, setRenewProfileTouched] = useState(false);
   const [dashboardLabelSaving, setDashboardLabelSaving] = useState(false);
   const [dashboardLabelStatus, setDashboardLabelStatus] = useState('');
 
@@ -419,7 +422,19 @@ export default function BillingPage() {
   };
 
   const createDashboardPaymentLink = async () => {
-    router.push(`/billing/checkout?type=dashboard&months=${selectedDashboardMonths}`);
+    const profile = ['service', 'product', 'both'].includes(renewProfileType)
+      ? renewProfileType
+      : dashboardProfile.business_type || 'both';
+    const booking = bookingAddonAllowed
+      ? resolvedRenewBooking
+      : false;
+    const params = new URLSearchParams({
+      type: 'dashboard',
+      months: String(selectedDashboardMonths),
+      profile,
+      booking: booking ? '1' : '0',
+    });
+    router.push(`/billing/checkout?${params.toString()}`);
   };
 
   const verifyBillingPayment = async (paymentLinkId) => {
@@ -447,6 +462,14 @@ export default function BillingPage() {
     loadBillingAdmins();
     loadPurchases();
   }, [loadBillingAdmins, loadPurchases, loadSummary]);
+
+  useEffect(() => {
+    if (renewProfileTouched) return;
+    const profile = summary?.dashboard?.profile;
+    if (!profile) return;
+    setRenewProfileType(profile.business_type || 'both');
+    setRenewBookingEnabled(Boolean(profile.booking_enabled));
+  }, [summary?.dashboard?.profile, renewProfileTouched]);
 
   const prepaidEstimate = useMemo(() => {
     const amount = toNumber(prepaidAmount, 0);
@@ -524,22 +547,32 @@ export default function BillingPage() {
   )?.months || 1;
   const selectedDashboardDiscount =
     dashboardOfferOptions.find((option) => option.months === selectedDashboardMonths)?.discount || 0;
-  const dashboardMonthlyCharge = Number(dashboardAmounts.total_inr || 0);
-  const dashboardBaseMonthly = Number(dashboardAmounts.base_inr || 0);
-  const dashboardBookingMonthly = Number(dashboardAmounts.booking_inr || 0);
-  const dashboardBaseTotal = dashboardBaseMonthly * selectedDashboardMonths;
-  const dashboardBookingTotal = dashboardBookingMonthly * selectedDashboardMonths;
-  const dashboardDiscountAmount = Number(
-    (dashboardBaseTotal * (selectedDashboardDiscount / 100)).toFixed(2)
+  const resolvedRenewProfile = ['service', 'product', 'both'].includes(renewProfileType)
+    ? renewProfileType
+    : dashboardProfile.business_type || 'both';
+  const bookingAddonAllowed = resolvedRenewProfile !== 'product';
+  const resolvedRenewBooking = bookingAddonAllowed
+    ? Boolean(renewBookingEnabled)
+    : false;
+  const renewalBaseMonthly =
+    resolvedRenewProfile === 'service'
+      ? toNumber(dashboardRates.service_inr, 0)
+      : resolvedRenewProfile === 'product'
+      ? toNumber(dashboardRates.product_inr, 0)
+      : toNumber(dashboardRates.both_inr, 0);
+  const renewalBookingMonthly = resolvedRenewBooking
+    ? toNumber(dashboardRates.booking_inr, 0)
+    : 0;
+  const renewalMonthlyCharge = dashboardChargeEnabled ? renewalBaseMonthly + renewalBookingMonthly : 0;
+  const renewalBaseTotal = renewalBaseMonthly * selectedDashboardMonths;
+  const renewalBookingTotal = renewalBookingMonthly * selectedDashboardMonths;
+  const renewalDiscountAmount = Number(
+    (renewalBaseTotal * (selectedDashboardDiscount / 100)).toFixed(2)
   );
-  const dashboardDiscountedBase = Number(
-    (dashboardBaseTotal - dashboardDiscountAmount).toFixed(2)
-  );
-  const dashboardSubtotal = Number((dashboardDiscountedBase + dashboardBookingTotal).toFixed(2));
-  const dashboardMaintenanceFee = Number(
-    (dashboardSubtotal * (maintenancePct / 100)).toFixed(2)
-  );
-  const dashboardTotalDue = Number((dashboardSubtotal + dashboardMaintenanceFee).toFixed(2));
+  const renewalDiscountedBase = Number((renewalBaseTotal - renewalDiscountAmount).toFixed(2));
+  const renewalSubtotal = Number((renewalDiscountedBase + renewalBookingTotal).toFixed(2));
+  const renewalMaintenanceFee = Number((renewalSubtotal * (maintenancePct / 100)).toFixed(2));
+  const renewalTotalDue = Number((renewalSubtotal + renewalMaintenanceFee).toFixed(2));
 
   return (
     <div className="space-y-6 p-4 sm:p-6">
@@ -978,6 +1011,51 @@ export default function BillingPage() {
                     <p className="mt-1 text-sm text-aa-text-dark">
                       Choose a plan length. Longer plans unlock discounts.
                     </p>
+                    <div className="mt-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+                      <p className="text-xs uppercase tracking-[0.18em] text-aa-gray">Renewal Profile</p>
+                      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="text-xs font-semibold text-aa-gray">Business profile</label>
+                          <select
+                            value={resolvedRenewProfile}
+                            onChange={(event) => {
+                              const nextType = event.target.value;
+                              setRenewProfileType(nextType);
+                              setRenewProfileTouched(true);
+                              if (nextType === 'product') {
+                                setRenewBookingEnabled(false);
+                              }
+                            }}
+                            className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-aa-text-dark focus:border-aa-orange focus:outline-none"
+                          >
+                            <option value="service">{serviceLabel}-based</option>
+                            <option value="product">{productLabel}-based</option>
+                            <option value="both">{productLabel} + {serviceLabel}</option>
+                          </select>
+                        </div>
+                        <div className="flex flex-col justify-between">
+                          <label className="text-xs font-semibold text-aa-gray">Booking add-on</label>
+                          <label className={`mt-2 inline-flex items-center gap-2 text-sm ${bookingAddonAllowed ? 'text-aa-text-dark' : 'text-aa-gray'}`}>
+                            <input
+                              type="checkbox"
+                              checked={resolvedRenewBooking}
+                              onChange={(event) => {
+                                setRenewBookingEnabled(event.target.checked);
+                                setRenewProfileTouched(true);
+                              }}
+                              disabled={!bookingAddonAllowed}
+                            />
+                            Include booking add-on{dashboardRates.booking_inr ? ` (+${formatInr(dashboardRates.booking_inr)}/month)` : ''}
+                          </label>
+                          {!bookingAddonAllowed && (
+                            <p className="mt-1 text-xs text-aa-gray">Booking add-on is available for service or combined profiles.</p>
+                          )}
+                        </div>
+                      </div>
+                      <p className="mt-3 text-xs text-aa-gray">
+                        Changing the profile here will update your account once the payment is verified.
+                      </p>
+                    </div>
                         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
                           {dashboardOfferOptions.map((option) => {
                             const isSelected = option.months === selectedDashboardMonths;
@@ -1018,38 +1096,38 @@ export default function BillingPage() {
                       <div className="mt-3 space-y-2 text-sm text-aa-text-dark">
                         <div className="flex items-center justify-between">
                           <span className="text-aa-gray">Base</span>
-                          <span className="font-semibold">{formatInr(dashboardBaseTotal)}</span>
+                          <span className="font-semibold">{formatInr(renewalBaseTotal)}</span>
                         </div>
-                        {dashboardBookingTotal > 0 && (
+                        {renewalBookingTotal > 0 && (
                           <div className="flex items-center justify-between">
                             <span className="text-aa-gray">Booking add-on</span>
-                            <span className="font-semibold">{formatInr(dashboardBookingTotal)}</span>
+                            <span className="font-semibold">{formatInr(renewalBookingTotal)}</span>
                           </div>
                         )}
                         <div className="flex items-center justify-between">
                           <span className="text-aa-gray">Discount</span>
                           <span className="font-semibold text-emerald-600">
-                            -{formatInr(dashboardDiscountAmount)}
+                            -{formatInr(renewalDiscountAmount)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-aa-gray">Maintenance ({maintenancePct}%)</span>
-                          <span className="font-semibold">{formatInr(dashboardMaintenanceFee)}</span>
+                          <span className="font-semibold">{formatInr(renewalMaintenanceFee)}</span>
                         </div>
                         <div className="border-t border-gray-100 pt-3 flex items-center justify-between text-base">
                           <span className="font-semibold text-aa-text-dark">Total</span>
-                          <span className="font-semibold text-aa-text-dark">{formatInr(dashboardTotalDue)}</span>
+                          <span className="font-semibold text-aa-text-dark">{formatInr(renewalTotalDue)}</span>
                         </div>
                       </div>
                       <Button
                         variant="primary"
                         onClick={createDashboardPaymentLink}
-                        disabled={dashboardMonthlyCharge <= 0}
+                        disabled={renewalMonthlyCharge <= 0}
                         className="mt-4 w-full"
                       >
                         Pay Subscription
                       </Button>
-                      {dashboardMonthlyCharge <= 0 && (
+                      {renewalMonthlyCharge <= 0 && (
                         <p className="mt-2 text-xs text-aa-gray">
                           Dashboard rates are not configured yet.
                         </p>
