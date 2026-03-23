@@ -96,6 +96,7 @@ export default function AppointmentsPage() {
     pushToast({ type: 'error', title: 'Not saved', message: catalogError });
   }, [catalogError, pushToast]);
   const appointmentsRefreshInFlightRef = useRef(false);
+  const statusChangeInFlightRef = useRef(false);
   const restrictedMode = isRestrictedModeUser(user);
 
   const hasAppointmentsAccess = Boolean(user?.id) && (restrictedMode || hasAppointmentAccess(user));
@@ -249,6 +250,9 @@ export default function AppointmentsPage() {
     if (!silent) {
       if (reset) {
         setLoading(true);
+        setAppointments([]);
+        setHasMore(false);
+        setOffset(0);
       } else {
         setLoadingMore(true);
       }
@@ -260,7 +264,10 @@ export default function AppointmentsPage() {
       params.set('offset', String(nextOffset));
       if (searchTerm) params.set('q', searchTerm);
       if (status && status !== 'all') params.set('status', status);
-      const response = await fetch(`/api/appointments?${params.toString()}`, { credentials: 'include' });
+      const response = await fetch(`/api/appointments?${params.toString()}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
       const data = await response.json();
       const list = data.data || [];
       const meta = data.meta || {};
@@ -295,6 +302,9 @@ export default function AppointmentsPage() {
         return;
       }
       if (editOpen || editSaving || updatingId || loadingMore || creatingContact) {
+        return;
+      }
+      if (statusChangeInFlightRef.current) {
         return;
       }
       const liveLimit = Math.min(500, Math.max(appointments.length, 50));
@@ -338,9 +348,12 @@ export default function AppointmentsPage() {
 
   async function updateStatus(appointmentId, status) {
     const previous = appointments;
+    statusChangeInFlightRef.current = true;
     setUpdatingId(appointmentId);
     setAppointments((prev) =>
-      prev.map((appt) => (appt.id === appointmentId ? { ...appt, status } : appt))
+      filterStatus !== 'all' && status !== filterStatus
+        ? prev.filter((appt) => appt.id !== appointmentId)
+        : prev.map((appt) => (appt.id === appointmentId ? { ...appt, status } : appt))
     );
 
     try {
@@ -368,6 +381,7 @@ export default function AppointmentsPage() {
       });
     } finally {
       setUpdatingId(null);
+      statusChangeInFlightRef.current = false;
     }
   }
 
@@ -416,6 +430,23 @@ export default function AppointmentsPage() {
     return { total, paid, due };
   };
 
+  const getAppointmentWhenLabel = (appt) => {
+    if (!appt?.start_time) return '—';
+    const start = new Date(appt.start_time);
+    if (Number.isNaN(start.getTime())) return '—';
+    const end = appt?.end_time ? new Date(appt.end_time) : null;
+    const dateLabel = start.toLocaleDateString();
+    const startTime = start.toLocaleTimeString();
+    if (!end || Number.isNaN(end.getTime())) {
+      return `${dateLabel} • ${startTime}`;
+    }
+    const endTime = end.toLocaleTimeString();
+    const sameDay = start.toDateString() === end.toDateString();
+    return sameDay
+      ? `${dateLabel} • ${startTime} - ${endTime}`
+      : `${dateLabel} ${startTime} → ${end.toLocaleDateString()} ${endTime}`;
+  };
+
   const getAppointmentKind = (appt) => {
     const kind = String(appt?.appointment_kind || '').trim().toLowerCase();
     if (kind === 'booking') return 'booking';
@@ -427,6 +458,15 @@ export default function AppointmentsPage() {
 
   const getAppointmentKindVariant = (appt) =>
     getAppointmentKind(appt) === 'booking' ? 'yellow' : 'blue';
+
+  const getAppointmentNameMeta = (appt) => {
+    const name = String(appt?.appointment_type || '').trim();
+    return {
+      label: getAppointmentKind(appt) === 'booking' ? 'Booking name' : 'Service name',
+      value: name || 'Not specified',
+      missing: !name,
+    };
+  };
 
   const getDefaultAppointmentKind = () => {
     if (canUseBookingAppointments && !canUseServiceAppointments) return 'booking';
@@ -984,14 +1024,6 @@ export default function AppointmentsPage() {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Loader size="md" text={`Loading ${labelLower}...`} />
-      </div>
-    );
-  }
-
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-6">
@@ -1086,75 +1118,91 @@ export default function AppointmentsPage() {
         </div>
       </div>
 
-      {appointments.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-lg">
-          <FontAwesomeIcon icon={faCalendarCheck} className="mx-auto text-gray-400 mb-2" style={{ fontSize: 48 }} />
-          <p className="text-gray-500">No {labelLower} found</p>
-        </div>
-      ) : viewMode === 'list' ? (
-        <div className="space-y-3">
-          {appointments.map((appt) => (
-            <div
-              key={appt.id}
-              className="bg-white p-4 rounded-xl border border-gray-200 hover:shadow-md transition"
-            >
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <h3 className="font-bold text-lg text-gray-900">{appt.user_name || 'Unknown'}</h3>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(appt.status)}`}>
-                      {String(appt.status || 'booked').replace('_', ' ').toUpperCase()}
-                    </span>
-                    <Badge variant={getAppointmentKindVariant(appt)}>
-                      {getAppointmentKindLabel(appt).toUpperCase()}
-                    </Badge>
-                    <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getPaymentBadge(getPaymentStatus(appt))}`}>
-                      {getPaymentStatus(appt).toUpperCase()}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600">{appt.phone || '—'}</p>
-                  <p className="text-gray-700 mt-2">
-                    {appt.appointment_type || getAppointmentKindLabel(appt)}
-                  </p>
-                  <div className="flex flex-wrap gap-4 text-sm mt-3">
-                    <span className="text-gray-500 flex items-center gap-2">
-                      <FontAwesomeIcon icon={faClock} />
-                      {appt.start_time ? new Date(appt.start_time).toLocaleDateString() : '—'} •{' '}
-                      {appt.start_time ? new Date(appt.start_time).toLocaleTimeString() : '—'}
-                    </span>
-                    {(() => {
-                      const summary = getPaymentSummary(appt);
-                      if (summary.total === null && summary.paid === null) return null;
-                      return (
-                        <span className="text-gray-500 flex items-center gap-2">
-                          <FontAwesomeIcon icon={faMoneyBillWave} />
-                          Paid {summary.paid ?? 0} / {summary.total ?? 0}
-                          {summary.due !== null ? ` • Due ${summary.due}` : ''}
-                        </span>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:flex-nowrap xl:justify-end">
-                  {renderStatusSegmented(
-                    appt.status || 'booked',
-                    (value) => updateStatus(appt.id, value),
-                    updatingId === appt.id,
-                    'md'
-                  )}
-                  <Button
-                    variant="outline"
-                    className="w-full justify-center px-4 py-2 text-sm sm:w-auto"
-                    onClick={() => openEdit(appt)}
-                  >
-                    <FontAwesomeIcon icon={faPenToSquare} />
-                    Edit
-                  </Button>
-                </div>
-              </div>
+      {viewMode === 'list' ? (
+        appointments.length === 0 ? (
+          loading ? (
+            <div className="rounded-lg border border-dashed border-gray-200 bg-white py-10">
+              <Loader size="sm" text={`Loading ${labelLower}...`} />
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="text-center py-12 bg-gray-50 rounded-lg">
+              <FontAwesomeIcon icon={faCalendarCheck} className="mx-auto text-gray-400 mb-2" style={{ fontSize: 48 }} />
+              <p className="text-gray-500">No {labelLower} found</p>
+            </div>
+          )
+        ) : (
+          <div className="space-y-3">
+            {appointments.map((appt) => {
+              const nameMeta = getAppointmentNameMeta(appt);
+              return (
+                <div
+                  key={appt.id}
+                  className="bg-white p-4 rounded-xl border border-gray-200 hover:shadow-md transition"
+                >
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <h3 className="font-bold text-lg text-gray-900">{appt.user_name || 'Unknown'}</h3>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(appt.status)}`}>
+                          {String(appt.status || 'booked').replace('_', ' ').toUpperCase()}
+                        </span>
+                        <Badge variant={getAppointmentKindVariant(appt)}>
+                          {getAppointmentKindLabel(appt).toUpperCase()}
+                        </Badge>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getPaymentBadge(getPaymentStatus(appt))}`}>
+                          {getPaymentStatus(appt).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                        <span>Phone: {appt.phone || '—'}</span>
+                        <span>Email: {appt.email || '—'}</span>
+                      </div>
+                      <p className="text-sm text-gray-700 mt-2">
+                        <span className="text-gray-500">{nameMeta.label}:</span>{' '}
+                        <span className={nameMeta.missing ? 'text-gray-400 italic' : 'text-gray-900'}>
+                          {nameMeta.value}
+                        </span>
+                      </p>
+                      <div className="flex flex-wrap gap-4 text-sm mt-3">
+                        <span className="text-gray-500 flex items-center gap-2">
+                          <FontAwesomeIcon icon={faClock} />
+                          When: {getAppointmentWhenLabel(appt)}
+                        </span>
+                        {(() => {
+                          const summary = getPaymentSummary(appt);
+                          if (summary.total === null && summary.paid === null) return null;
+                          return (
+                            <span className="text-gray-500 flex items-center gap-2">
+                              <FontAwesomeIcon icon={faMoneyBillWave} />
+                              Paid {summary.paid ?? 0} / {summary.total ?? 0}
+                              {summary.due !== null ? ` • Due ${summary.due}` : ''}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:flex-nowrap xl:justify-end">
+                      {renderStatusSegmented(
+                        appt.status || 'booked',
+                        (value) => updateStatus(appt.id, value),
+                        updatingId === appt.id,
+                        'md'
+                      )}
+                      <Button
+                        variant="outline"
+                        className="group w-full justify-center gap-2 px-3 py-2 text-sm sm:w-auto"
+                        onClick={() => openEdit(appt)}
+                      >
+                        <FontAwesomeIcon icon={faPenToSquare} />
+                        <span className="hidden sm:inline">Edit</span>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {statusColumns.map((col) => (
@@ -1170,50 +1218,60 @@ export default function AppointmentsPage() {
               </div>
 
               <div className="space-y-3">
-                {(appointmentsByStatus[col.key] || []).length === 0 ? (
+                {loading && (appointmentsByStatus[col.key] || []).length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-gray-200 bg-white py-6">
+                    <Loader size="sm" text={`Loading ${col.label.toLowerCase()}...`} />
+                  </div>
+                ) : (appointmentsByStatus[col.key] || []).length === 0 ? (
                   <div className="rounded-lg border border-dashed border-gray-200 bg-white p-4 text-sm text-aa-gray">
                     No {col.label.toLowerCase()} {labelLower}.
                   </div>
                 ) : (
-                  appointmentsByStatus[col.key].map((appt) => (
-                    <div key={appt.id} className="rounded-xl border border-gray-200 bg-white p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-aa-text-dark">{appt.user_name || 'Unknown'}</p>
-                          <p className="text-xs text-aa-gray">{appt.phone || '—'}</p>
+                  appointmentsByStatus[col.key].map((appt) => {
+                    const nameMeta = getAppointmentNameMeta(appt);
+                    return (
+                      <div key={appt.id} className="rounded-xl border border-gray-200 bg-white p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-aa-text-dark">{appt.user_name || 'Unknown'}</p>
+                            <p className="text-xs text-aa-gray">{appt.phone || '—'}</p>
+                            <p className="text-xs text-aa-gray">{appt.email || '—'}</p>
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getPaymentBadge(getPaymentStatus(appt))}`}>
+                            {getPaymentStatus(appt).toUpperCase()}
+                          </span>
                         </div>
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getPaymentBadge(getPaymentStatus(appt))}`}>
-                          {getPaymentStatus(appt).toUpperCase()}
-                        </span>
+                        <div className="mt-3 text-sm text-aa-text-dark">
+                          <span className="text-aa-gray">{nameMeta.label}:</span>{' '}
+                          <span className={nameMeta.missing ? 'text-aa-gray italic' : 'text-aa-text-dark'}>
+                            {nameMeta.value}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-aa-gray">
+                          <Badge variant={getAppointmentKindVariant(appt)}>
+                            {getAppointmentKindLabel(appt)}
+                          </Badge>
+                          <span>When: {getAppointmentWhenLabel(appt)}</span>
+                        </div>
+                        <div className="mt-3 flex items-center justify-between gap-2">
+                          {renderStatusStacked(
+                            appt.status || 'booked',
+                            (value) => updateStatus(appt.id, value),
+                            updatingId === appt.id
+                          )}
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center gap-2 rounded-full border border-aa-orange px-3 py-1 text-xs font-semibold text-aa-orange transition hover:bg-aa-orange hover:text-white"
+                            onClick={() => openEdit(appt)}
+                            aria-label="Edit appointment"
+                          >
+                            <FontAwesomeIcon icon={faPenToSquare} />
+                            <span className="hidden sm:inline">Edit</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className="mt-3 text-sm text-aa-text-dark">
-                        {appt.appointment_type || getAppointmentKindLabel(appt)}
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-aa-gray">
-                        <Badge variant={getAppointmentKindVariant(appt)}>
-                          {getAppointmentKindLabel(appt)}
-                        </Badge>
-                        <span>
-                        {appt.start_time ? new Date(appt.start_time).toLocaleDateString() : '—'} •{' '}
-                        {appt.start_time ? new Date(appt.start_time).toLocaleTimeString() : '—'}
-                        </span>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between gap-2">
-                        {renderStatusStacked(
-                          appt.status || 'booked',
-                          (value) => updateStatus(appt.id, value),
-                          updatingId === appt.id
-                        )}
-                        <button
-                          type="button"
-                          className="px-3 py-1 text-xs font-semibold text-aa-orange border border-aa-orange rounded-full hover:bg-aa-orange hover:text-white transition"
-                          onClick={() => openEdit(appt)}
-                        >
-                          Edit
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </Card>

@@ -15,6 +15,7 @@ import {
   faUser,
   faClipboardList,
   faTrashCan,
+  faPlus,
 } from '@fortawesome/free-solid-svg-icons';
 import Card from '../components/common/Card.jsx';
 import Button from '../components/common/Button.jsx';
@@ -111,6 +112,19 @@ const CHANNEL_OPTIONS = [
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'instagram', label: 'Instagram' },
   { value: 'website', label: 'Website' },
+  { value: 'manual', label: 'Manual' },
+];
+
+const CHANNEL_CONTROL_OPTIONS = CHANNEL_OPTIONS.filter((option) => option.value !== 'all');
+
+const PAYMENT_METHOD_OPTIONS = [
+  { value: '', label: 'Not set' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'card', label: 'Card' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'bank', label: 'Bank transfer' },
+  { value: 'wallet', label: 'Wallet' },
+  { value: 'other', label: 'Other' },
 ];
 
 const RANGE_OPTIONS = [
@@ -146,6 +160,22 @@ const getOrderTotal = (order) => {
   if (Number.isFinite(Number(order?.total))) return Number(order.total);
   const items = Array.isArray(order?.items) ? order.items : [];
   return items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
+};
+
+const getItemsTotal = (items = []) =>
+  (Array.isArray(items) ? items : []).reduce(
+    (sum, item) => sum + Number(item?.price || 0) * Number(item?.quantity || 0),
+    0
+  );
+
+const parsePriceLabel = (label) => {
+  const raw = String(label || '')
+    .replace(/[, ]+/g, ' ')
+    .trim();
+  const match = raw.match(/(\d+(\.\d+)?)/);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
 };
 
 const getItemCount = (order) => {
@@ -245,6 +275,29 @@ export default function OrdersPage() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [activeOrder, setActiveOrder] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createSaving, setCreateSaving] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [catalogItems, setCatalogItems] = useState([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState('');
+  const [createForm, setCreateForm] = useState({
+    order_number: '',
+    customer_name: '',
+    customer_phone: '',
+    customer_email: '',
+    channel: 'manual',
+    status: 'new',
+    fulfillment_status: 'unfulfilled',
+    payment_status: 'pending',
+    payment_method: '',
+    payment_total: '',
+    payment_paid: '',
+    delivery_method: 'Delivery',
+    delivery_address: '',
+    note: '',
+    items: [{ catalog_id: '', name: '', quantity: '1', price: '' }],
+  });
   const [sendingPaymentLink, setSendingPaymentLink] = useState(false);
   const [schedulingPaymentLink, setSchedulingPaymentLink] = useState(false);
   const [paymentLinkFeedback, setPaymentLinkFeedback] = useState({ type: '', text: '' });
@@ -438,6 +491,32 @@ export default function OrdersPage() {
     return { total, pending, fulfilled, revenue };
   }, [orders]);
 
+  const createItemsTotal = useMemo(
+    () => getItemsTotal(createForm.items),
+    [createForm.items]
+  );
+
+  const catalogOptions = useMemo(() => {
+    const baseLabel = catalogLoading ? 'Loading products/services...' : 'Select product or service';
+    const options = [{ value: '', label: baseLabel }];
+    const sorted = [...catalogItems].sort((a, b) =>
+      String(a?.name || '').localeCompare(String(b?.name || ''))
+    );
+    sorted.forEach((item) => {
+      if (!item?.name) return;
+      const typeLabel = item.item_type === 'service' ? 'Service' : 'Product';
+      const priceLabel = item.price_label ? ` • ${item.price_label}` : '';
+      options.push({
+        value: String(item.id),
+        label: `${item.name}${priceLabel} • ${typeLabel}`,
+      });
+    });
+    if (options.length === 1 && !catalogLoading) {
+      options[0].label = 'No products/services found';
+    }
+    return options;
+  }, [catalogItems, catalogLoading]);
+
   const toggleSelect = (orderId) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -556,6 +635,199 @@ export default function OrdersPage() {
     const nextNotes = [...(activeOrder.notes || []), nextNote];
     updateOrder(activeOrder.id, { notes: nextNotes });
     setNoteDraft('');
+  };
+
+  const loadCatalogItems = async () => {
+    if (catalogLoading) return;
+    setCatalogLoading(true);
+    setCatalogError('');
+    try {
+      const params = new URLSearchParams();
+      params.set('type', 'all');
+      params.set('status', 'active');
+      params.set('limit', '500');
+      const response = await fetch(`/api/catalog?${params.toString()}`, {
+        credentials: 'include',
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error || 'Failed to load products/services.');
+      }
+      const items = Array.isArray(payload?.data) ? payload.data : [];
+      setCatalogItems(items);
+    } catch (err) {
+      setCatalogItems([]);
+      setCatalogError(err.message || 'Failed to load products/services.');
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  const resetCreateForm = () =>
+    setCreateForm({
+      order_number: '',
+      customer_name: '',
+      customer_phone: '',
+      customer_email: '',
+      channel: 'manual',
+      status: 'new',
+      fulfillment_status: 'unfulfilled',
+      payment_status: 'pending',
+      payment_method: '',
+      payment_total: '',
+      payment_paid: '',
+      delivery_method: 'Delivery',
+      delivery_address: '',
+      note: '',
+      items: [{ catalog_id: '', name: '', quantity: '1', price: '' }],
+    });
+
+  const openCreate = () => {
+    setCreateError('');
+    if (!catalogItems.length && !catalogLoading) {
+      loadCatalogItems();
+    }
+    resetCreateForm();
+    setCreateOpen(true);
+  };
+
+  const updateCreateField = (field) => (event) => {
+    const value = event.target.value;
+    setCreateForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const updateCreateItem = (index, field, value) => {
+    setCreateForm((prev) => {
+      const items = Array.isArray(prev.items) ? [...prev.items] : [];
+      if (field === 'name') {
+        items[index] = { ...items[index], [field]: value, catalog_id: '' };
+      } else {
+        items[index] = { ...items[index], [field]: value };
+      }
+      return { ...prev, items };
+    });
+  };
+
+  const handleCatalogSelect = (index, value) => {
+    setCreateForm((prev) => {
+      const items = Array.isArray(prev.items) ? [...prev.items] : [];
+      const matched = catalogItems.find((item) => String(item.id) === String(value));
+      if (!matched) {
+        items[index] = { ...items[index], catalog_id: '' };
+        return { ...prev, items };
+      }
+      const price = parsePriceLabel(matched.price_label);
+      const nextPrice = price !== null ? String(Math.round(price)) : items[index]?.price || '';
+      items[index] = {
+        ...items[index],
+        catalog_id: String(matched.id),
+        name: String(matched.name || ''),
+        price: nextPrice,
+        quantity: items[index]?.quantity || '1',
+      };
+      return { ...prev, items };
+    });
+  };
+
+  const addCreateItem = () => {
+    setCreateForm((prev) => ({
+      ...prev,
+      items: [
+        ...(Array.isArray(prev.items) ? prev.items : []),
+        { catalog_id: '', name: '', quantity: '1', price: '' },
+      ],
+    }));
+  };
+
+  const removeCreateItem = (index) => {
+    setCreateForm((prev) => {
+      const items = (Array.isArray(prev.items) ? prev.items : []).filter((_, idx) => idx !== index);
+      return {
+        ...prev,
+        items: items.length ? items : [{ catalog_id: '', name: '', quantity: '1', price: '' }],
+      };
+    });
+  };
+
+  const createOrder = async () => {
+    const customerName = String(createForm.customer_name || '').trim();
+    const customerPhone = String(createForm.customer_phone || '').trim();
+    if (!customerName && !customerPhone) {
+      setCreateError('Customer name or phone is required.');
+      return;
+    }
+    const itemsPayload = (Array.isArray(createForm.items) ? createForm.items : [])
+      .map((item) => ({
+        name: String(item?.name || '').trim(),
+        quantity: Math.max(1, Number(item?.quantity || 1)),
+        price: Number(item?.price || 0),
+      }))
+      .filter((item) => item.name);
+
+    if (!itemsPayload.length) {
+      setCreateError('Add at least one item to create an order.');
+      return;
+    }
+
+    const itemsTotal = getItemsTotal(itemsPayload);
+    const paymentTotal =
+      createForm.payment_total !== '' ? Number(createForm.payment_total) : itemsTotal;
+    const paymentPaid =
+      createForm.payment_paid !== '' ? Number(createForm.payment_paid) : 0;
+    const note = String(createForm.note || '').trim();
+    const notesPayload = note
+      ? [
+          {
+            id: `note-${Date.now()}`,
+            message: note,
+            author: user?.name || 'Admin',
+            created_at: new Date().toISOString(),
+          },
+        ]
+      : [];
+
+    setCreateSaving(true);
+    setCreateError('');
+    try {
+      const response = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          order_number: String(createForm.order_number || '').trim() || null,
+          customer_name: customerName,
+          customer_phone: customerPhone || null,
+          customer_email: String(createForm.customer_email || '').trim() || null,
+          channel: createForm.channel,
+          status: createForm.status,
+          fulfillment_status: createForm.fulfillment_status,
+          payment_status: createForm.payment_status,
+          payment_method: createForm.payment_method,
+          payment_total: Number.isFinite(paymentTotal) ? paymentTotal : null,
+          payment_paid: Number.isFinite(paymentPaid) ? paymentPaid : 0,
+          payment_currency: 'INR',
+          delivery_method: String(createForm.delivery_method || '').trim() || null,
+          delivery_address: String(createForm.delivery_address || '').trim() || null,
+          items: itemsPayload,
+          notes: notesPayload,
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.error || 'Unable to create order.');
+      }
+      if (payload?.data) {
+        setOrders((prev) => [payload.data, ...prev]);
+      } else {
+        fetchOrders();
+      }
+      setCreateOpen(false);
+      pushToast({ type: 'success', title: 'Order created', message: 'Manual order added.' });
+    } catch (err) {
+      setCreateError(err.message || 'Unable to create order.');
+    } finally {
+      setCreateSaving(false);
+    }
   };
 
   const sendRemainingPaymentLink = async () => {
@@ -723,6 +995,12 @@ export default function OrdersPage() {
           <p className="text-aa-gray">Track and manage WhatsApp orders end-to-end.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
+          <Button variant="primary" onClick={openCreate} className="w-full sm:w-auto">
+            <span className="inline-flex items-center gap-2">
+              <FontAwesomeIcon icon={faPlus} />
+              Add Order
+            </span>
+          </Button>
           <Button variant="outline" onClick={() => fetchOrders()} className="w-full sm:w-auto">
             Refresh
           </Button>
@@ -1060,6 +1338,223 @@ export default function OrdersPage() {
           </div>
         </>
       )}
+
+      <Modal
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Add Order"
+        size="lg"
+      >
+        <div className="space-y-5">
+          {createError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {createError}
+            </div>
+          )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Order Number (optional)"
+              value={createForm.order_number}
+              onChange={updateCreateField('order_number')}
+              placeholder="MAN-0001"
+            />
+            <GeminiSelect
+              label="Channel"
+              value={createForm.channel}
+              onChange={(value) => setCreateForm((prev) => ({ ...prev, channel: value }))}
+              options={CHANNEL_CONTROL_OPTIONS}
+              size="sm"
+              variant="warm"
+            />
+            <Input
+              label="Customer Name"
+              value={createForm.customer_name}
+              onChange={updateCreateField('customer_name')}
+              placeholder="Customer name"
+              required
+            />
+            <Input
+              label="Customer Phone"
+              value={createForm.customer_phone}
+              onChange={updateCreateField('customer_phone')}
+              placeholder="Phone number"
+            />
+            <Input
+              label="Customer Email"
+              value={createForm.customer_email}
+              onChange={updateCreateField('customer_email')}
+              placeholder="Email address"
+            />
+            <GeminiSelect
+              label="Status"
+              value={createForm.status}
+              onChange={(value) => setCreateForm((prev) => ({ ...prev, status: value }))}
+              options={ORDER_STATUS_CONTROL_OPTIONS}
+              size="sm"
+              variant="warm"
+            />
+            <GeminiSelect
+              label="Fulfillment"
+              value={createForm.fulfillment_status}
+              onChange={(value) => setCreateForm((prev) => ({ ...prev, fulfillment_status: value }))}
+              options={FULFILLMENT_CONTROL_OPTIONS}
+              size="sm"
+              variant="warm"
+            />
+            <GeminiSelect
+              label="Payment Status"
+              value={createForm.payment_status}
+              onChange={(value) => setCreateForm((prev) => ({ ...prev, payment_status: value }))}
+              options={PAYMENT_CONTROL_OPTIONS}
+              size="sm"
+              variant="warm"
+            />
+            <GeminiSelect
+              label="Payment Method"
+              value={createForm.payment_method}
+              onChange={(value) => setCreateForm((prev) => ({ ...prev, payment_method: value }))}
+              options={PAYMENT_METHOD_OPTIONS}
+              size="sm"
+              variant="warm"
+            />
+            <Input
+              label="Payment Total"
+              type="number"
+              value={createForm.payment_total}
+              onChange={updateCreateField('payment_total')}
+              placeholder={createItemsTotal ? String(createItemsTotal) : '0'}
+            />
+            <Input
+              label="Paid Amount"
+              type="number"
+              value={createForm.payment_paid}
+              onChange={updateCreateField('payment_paid')}
+              placeholder="0"
+            />
+          </div>
+
+          <div className="rounded-xl border border-gray-200 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-aa-text-dark">Items</p>
+              <div className="flex items-center gap-2">
+                {catalogError ? (
+                  <span className="text-xs text-red-600">{catalogError}</span>
+                ) : catalogLoading ? (
+                  <span className="text-xs text-aa-gray">Loading products...</span>
+                ) : null}
+                <Button variant="outline" className="text-xs" onClick={addCreateItem}>
+                  Add item
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {createForm.items.map((item, index) => (
+                <div
+                  key={`new-item-${index}`}
+                  className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end"
+                >
+                  <div className="md:col-span-12">
+                    <GeminiSelect
+                      label={index === 0 ? 'Product or Service' : ''}
+                      value={item.catalog_id || ''}
+                      onChange={(value) => handleCatalogSelect(index, value)}
+                      options={catalogOptions}
+                      size="sm"
+                      variant="warm"
+                    />
+                  </div>
+                  <div className="md:col-span-6">
+                    <Input
+                      label={index === 0 ? 'Item Name' : ''}
+                      value={item.name}
+                      onChange={(event) => updateCreateItem(index, 'name', event.target.value)}
+                      placeholder="Product name"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Input
+                      label={index === 0 ? 'Qty' : ''}
+                      type="number"
+                      value={item.quantity}
+                      onChange={(event) => updateCreateItem(index, 'quantity', event.target.value)}
+                      placeholder="1"
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <Input
+                      label={index === 0 ? 'Price' : ''}
+                      type="number"
+                      value={item.price}
+                      onChange={(event) => updateCreateItem(index, 'price', event.target.value)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="md:col-span-1 flex justify-start md:justify-end">
+                    <button
+                      type="button"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-red-600 hover:border-red-200 hover:bg-red-50"
+                      onClick={() => removeCreateItem(index)}
+                      aria-label="Remove item"
+                    >
+                      <FontAwesomeIcon icon={faTrashCan} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center justify-between text-sm text-aa-gray">
+              <span>Items total</span>
+              <span className="font-semibold text-aa-text-dark">
+                {formatCurrency(createItemsTotal, 'INR')}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Delivery Method"
+              value={createForm.delivery_method}
+              onChange={updateCreateField('delivery_method')}
+              placeholder="Delivery / Pickup"
+            />
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold text-aa-text-dark mb-2">
+                Delivery Address
+              </label>
+              <textarea
+                value={createForm.delivery_address}
+                onChange={(event) =>
+                  setCreateForm((prev) => ({ ...prev, delivery_address: event.target.value }))
+                }
+                placeholder="Address details"
+                className="w-full rounded-lg border-2 border-gray-200 bg-white px-4 py-3 text-sm text-aa-text-dark outline-none placeholder:text-gray-400 focus:border-aa-orange"
+                rows={3}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold text-aa-text-dark mb-2">
+                Internal Note (optional)
+              </label>
+              <textarea
+                value={createForm.note}
+                onChange={(event) => setCreateForm((prev) => ({ ...prev, note: event.target.value }))}
+                placeholder="Add a quick note for the team..."
+                className="w-full rounded-lg border-2 border-gray-200 bg-white px-4 py-3 text-sm text-aa-text-dark outline-none placeholder:text-gray-400 focus:border-aa-orange"
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-end">
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="primary" onClick={createOrder} disabled={createSaving}>
+              {createSaving ? 'Saving...' : 'Create Order'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         isOpen={Boolean(activeOrder)}
