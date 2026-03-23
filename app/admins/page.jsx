@@ -217,6 +217,7 @@ export default function AdminsPage() {
         throw result.error || new Error('Failed to update admin');
       }
       setEditOpen(false);
+      fetchTypeRequests();
       pushToast({ type: 'success', title: 'Saved', message: 'Admin updated.' });
     } catch (err) {
       setEditError(err.message || 'Failed to update admin');
@@ -323,6 +324,13 @@ export default function AdminsPage() {
     { value: 'product', label: 'Products' },
     { value: 'service', label: 'Services' },
   ];
+  const pendingTypeCount = typeRequests.length;
+  const resolveBusinessTypeLabel = (value) =>
+    businessTypeOptions.find((option) => option.value === value)?.label || 'Products + Services';
+  const pendingRequestForEdit = useMemo(
+    () => typeRequests.find((req) => req.admin_id === editForm.id),
+    [typeRequests, editForm.id]
+  );
 
   if (authLoading || (user && user.admin_tier !== 'super_admin')) {
     return null;
@@ -371,7 +379,14 @@ export default function AdminsPage() {
       <Card className="p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-aa-dark-blue">Business Type Requests</h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-aa-dark-blue">Business Type Requests</h3>
+              {pendingTypeCount > 0 && (
+                <Badge variant="orange" className="px-2 py-0.5 text-[11px]">
+                  {pendingTypeCount}
+                </Badge>
+              )}
+            </div>
             <p className="text-sm text-aa-gray">Pending changes awaiting approval</p>
           </div>
           <Button
@@ -612,22 +627,43 @@ export default function AdminsPage() {
               {businessTypeOptions.map((option) => {
                 const active = editForm.business_type === option.value;
                 return (
-                  <div
+                  <button
                     key={option.value}
-                    className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                    type="button"
+                    onClick={() =>
+                      setEditForm((prev) => ({ ...prev, business_type: option.value }))
+                    }
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                       active
                         ? 'border-aa-orange bg-aa-orange/10 text-aa-dark-blue'
-                        : 'border-gray-200 text-aa-gray'
+                        : 'border-gray-200 text-aa-gray hover:border-aa-orange hover:text-aa-dark-blue'
                     }`}
                   >
                     {option.label}
-                  </div>
+                  </button>
                 );
               })}
             </div>
             <p className="mt-2 text-xs text-aa-gray">
-              Business type changes must be requested by the admin and approved in the requests list above.
+              Super admins can update business types instantly. Pending admin requests appear in the list above.
             </p>
+            {pendingRequestForEdit && (
+              <div className="mt-2 rounded-lg border border-aa-orange/20 bg-[#fff8f1] px-3 py-2 text-xs text-aa-orange">
+                <span className="font-semibold uppercase tracking-[0.18em]">New request</span>
+                <div className="mt-1 text-aa-text-dark">
+                  {resolveBusinessTypeLabel(pendingRequestForEdit.current_business_type)} →{' '}
+                  {resolveBusinessTypeLabel(pendingRequestForEdit.requested_business_type)}
+                </div>
+                <div className="mt-1 text-aa-gray">
+                  Payment:{' '}
+                  {pendingRequestForEdit.payment_required
+                    ? pendingRequestForEdit.payment_status === 'paid'
+                      ? 'Paid'
+                      : 'Pending'
+                    : 'Not required'}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="rounded-lg border border-gray-200 p-3">

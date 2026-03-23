@@ -36,6 +36,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
   const pathname = usePathname();
   const { user } = useAuth();
   const [inboxCount, setInboxCount] = useState(0);
+  const [typeRequestCount, setTypeRequestCount] = useState(0);
   const restrictedMode = isRestrictedModeUser(user);
 
   const showAppointments = Boolean(user?.id) && hasAppointmentAccess(user);
@@ -79,6 +80,42 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     };
   }, [user?.id, restrictedMode]);
 
+  useEffect(() => {
+    if (!user?.id || restrictedMode || user.admin_tier !== 'super_admin') {
+      setTypeRequestCount(0);
+      return;
+    }
+    let mounted = true;
+
+    const fetchTypeRequestCount = async () => {
+      try {
+        const response = await fetch('/api/admins/business-type-requests?status=pending', {
+          credentials: 'include',
+        });
+        const data = await response.json();
+        if (!mounted) return;
+        if (!response.ok) {
+          setTypeRequestCount(0);
+          return;
+        }
+        const count = Array.isArray(data?.data) ? data.data.length : 0;
+        setTypeRequestCount(Math.max(0, count));
+      } catch (error) {
+        if (mounted) setTypeRequestCount(0);
+      }
+    };
+
+    fetchTypeRequestCount();
+    const handler = () => fetchTypeRequestCount();
+    window.addEventListener('aa-badge-refresh', handler);
+    const timer = setInterval(fetchTypeRequestCount, 30000);
+    return () => {
+      mounted = false;
+      window.removeEventListener('aa-badge-refresh', handler);
+      clearInterval(timer);
+    };
+  }, [user?.id, user?.admin_tier, restrictedMode]);
+
   const menuItems = [
     { name: 'Dashboard', icon: faGauge, path: '/dashboard' },
     { name: 'Inbox', icon: faInbox, path: '/inbox', badge: inboxCount > 0 ? String(inboxCount) : null },
@@ -90,7 +127,13 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     ...(showBooking ? [{ name: 'Booking', icon: faHotel, path: '/booking' }] : []),
     { name: 'Reports', icon: faChartBar, path: '/reports' },
     { name: 'Billing', icon: faCreditCard, path: '/billing' },
-    { name: 'Admins', icon: faUserGroup, path: '/admins', roles: ['super_admin'] },
+    {
+      name: 'Admins',
+      icon: faUserGroup,
+      path: '/admins',
+      roles: ['super_admin'],
+      badge: typeRequestCount > 0 ? String(typeRequestCount) : null,
+    },
     { name: 'Settings', icon: faGear, path: '/settings' },
     // { name: 'Broadcast', icon: faTowerBroadcast, path: '/broadcast' },
     // { name: 'Templates', icon: faFileLines, path: '/templates' },
