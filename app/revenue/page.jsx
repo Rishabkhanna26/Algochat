@@ -130,13 +130,24 @@ export default function RevenuePage() {
   const revenueTopDayLabel = analysis?.top_day?.label || 'N/A';
   const revenueTopDayValue = toAmount(analysis?.top_day?.earned || 0);
   const revenueTrendMax = getYAxisUpperBound(revenueTrendData, ['earned', 'booked']);
-  const whatsappRevenueEarned = toAmount(stats?.whatsapp_revenue_paid ?? analysis?.total_earned);
-  const whatsappRevenueBooked = toAmount(stats?.whatsapp_revenue_booked ?? analysis?.total_booked);
-  const whatsappRevenueOutstanding = toAmount(
-    stats?.whatsapp_revenue_outstanding ?? analysis?.outstanding_total
+  const revenueEarned = toAmount(
+    stats?.total_revenue_paid ??
+      (toAmount(stats?.whatsapp_revenue_paid) + toAmount(stats?.subscription_revenue_paid)) ??
+      analysis?.total_earned
   );
+  const revenueBooked = toAmount(
+    stats?.total_revenue_booked ??
+      (toAmount(stats?.whatsapp_revenue_booked) + toAmount(stats?.subscription_revenue_booked)) ??
+      analysis?.total_booked
+  );
+  const revenueOutstanding = toAmount(
+    stats?.total_revenue_outstanding ??
+      (toAmount(stats?.whatsapp_revenue_outstanding) + toAmount(stats?.subscription_revenue_outstanding)) ??
+      analysis?.outstanding_total
+  );
+  const subscriptionRevenuePaid = toAmount(stats?.subscription_revenue_paid || 0);
   const aiSpendInr = toAmount(stats?.ai_spend_inr || 0);
-  const netRevenue = toAmount(whatsappRevenueEarned - aiSpendInr);
+  const netRevenue = toAmount(revenueEarned - aiSpendInr);
 
   if (!hasRevenueAccess) {
     return (
@@ -196,8 +207,8 @@ export default function RevenuePage() {
             <p className="revenue-summary-label text-xs font-semibold uppercase tracking-wide">Earned (Collected)</p>
             <FontAwesomeIcon icon={faWallet} className="revenue-summary-icon" />
           </div>
-          <p className="revenue-summary-value text-2xl font-bold">{formatCurrency(whatsappRevenueEarned)}</p>
-          <p className="revenue-summary-copy mt-1 text-xs">Collected from WhatsApp orders</p>
+          <p className="revenue-summary-value text-2xl font-bold">{formatCurrency(revenueEarned)}</p>
+          <p className="revenue-summary-copy mt-1 text-xs">Collected from orders + subscriptions</p>
         </div>
 
         <div className="revenue-summary-card revenue-summary-card--booked rounded-lg border p-4 shadow-sm">
@@ -205,8 +216,8 @@ export default function RevenuePage() {
             <p className="revenue-summary-label text-xs font-semibold uppercase tracking-wide">Booked Revenue</p>
             <FontAwesomeIcon icon={faMoneyBillTrendUp} className="revenue-summary-icon" />
           </div>
-          <p className="revenue-summary-value text-2xl font-bold">{formatCurrency(whatsappRevenueBooked)}</p>
-          <p className="revenue-summary-copy mt-1 text-xs">Total order value generated</p>
+          <p className="revenue-summary-value text-2xl font-bold">{formatCurrency(revenueBooked)}</p>
+          <p className="revenue-summary-copy mt-1 text-xs">Total orders + subscription value generated</p>
         </div>
 
         <div className="revenue-summary-card revenue-summary-card--outstanding rounded-lg border p-4 shadow-sm">
@@ -214,7 +225,7 @@ export default function RevenuePage() {
             <p className="revenue-summary-label text-xs font-semibold uppercase tracking-wide">Outstanding</p>
             <FontAwesomeIcon icon={faClock} className="revenue-summary-icon" />
           </div>
-          <p className="revenue-summary-value text-2xl font-bold">{formatCurrency(whatsappRevenueOutstanding)}</p>
+          <p className="revenue-summary-value text-2xl font-bold">{formatCurrency(revenueOutstanding)}</p>
           <p className="revenue-summary-copy mt-1 text-xs">Pending to be collected</p>
         </div>
 
@@ -231,6 +242,15 @@ export default function RevenuePage() {
           </div>
           <p className="revenue-summary-value text-2xl font-bold">{formatCurrency(aiSpendInr)}</p>
           <p className="revenue-summary-copy mt-1 text-xs">Pay-as-you-go AI usage</p>
+        </div>
+
+        <div className="revenue-summary-card revenue-summary-card--booked rounded-lg border p-4 shadow-sm">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="revenue-summary-label text-xs font-semibold uppercase tracking-wide">Subscription Revenue</p>
+            <FontAwesomeIcon icon={faWallet} className="revenue-summary-icon" />
+          </div>
+          <p className="revenue-summary-value text-2xl font-bold">{formatCurrency(subscriptionRevenuePaid)}</p>
+          <p className="revenue-summary-copy mt-1 text-xs">Collected from subscription purchases</p>
         </div>
 
         <div className="revenue-summary-card revenue-summary-card--net rounded-lg border p-4 shadow-sm">
