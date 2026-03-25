@@ -31,6 +31,8 @@ export default function BillingCheckoutPage() {
   const params = useSearchParams();
   const { user, refresh } = useAuth();
   const { pushToast } = useToast();
+  const canUseTokenSystem =
+    user?.admin_tier === 'super_admin' || user?.token_system_enabled === true;
   const rawType = params.get('type');
   const type = rawType === 'payg' ? 'payg' : rawType === 'dashboard' ? 'dashboard' : 'prepaid';
   const amountParam = params.get('amount');
@@ -143,7 +145,19 @@ export default function BillingCheckoutPage() {
     return { inputTokens, outputTokens };
   }, [baseInr, pricing, type]);
 
+  const openPaymentUrl = (url) => {
+    if (!url) return;
+    const popup = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!popup) {
+      window.location.href = url;
+    }
+  };
+
   const handleCreatePayment = async () => {
+    if ((type === 'payg' || type === 'prepaid') && !canUseTokenSystem) {
+      setActionStatus('Token billing is disabled for your account.');
+      return;
+    }
     setProcessing(true);
     setActionStatus('');
     try {
@@ -173,7 +187,7 @@ export default function BillingCheckoutPage() {
       }
       setPaymentLink(payload?.data || null);
       if (payload?.data?.short_url) {
-        window.open(payload.data.short_url, '_blank', 'noopener,noreferrer');
+        openPaymentUrl(payload.data.short_url);
       }
       setActionStatus('Payment link created.');
     } catch (err) {
@@ -208,6 +222,24 @@ export default function BillingCheckoutPage() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-sm text-aa-gray">Loading billing details...</div>
+      </div>
+    );
+  }
+
+  if ((type === 'payg' || type === 'prepaid') && !canUseTokenSystem) {
+    return (
+      <div className="space-y-6 p-4 sm:p-6">
+        <Card className="border border-gray-200 bg-white">
+          <h2 className="text-lg font-semibold text-aa-text-dark">Token Billing Disabled</h2>
+          <p className="mt-2 text-sm text-aa-gray">
+            Your super admin has disabled token billing for this account.
+          </p>
+          <div className="mt-4">
+            <Button variant="primary" onClick={() => router.push('/dashboard')}>
+              Back to Dashboard
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }
@@ -340,7 +372,7 @@ export default function BillingCheckoutPage() {
           {paymentLink?.short_url && (
             <Button
               variant="ghost"
-              onClick={() => window.open(paymentLink.short_url, '_blank', 'noopener,noreferrer')}
+              onClick={() => openPaymentUrl(paymentLink.short_url)}
             >
               Open Payment Link
             </Button>

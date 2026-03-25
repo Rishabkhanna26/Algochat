@@ -227,10 +227,10 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
             </div>
             {showBrandText && !compactDesktop && (
               <div className="min-w-0 flex-1">
-                <p className="w-full whitespace-nowrap text-[22px] font-semibold leading-tight tracking-tight text-white">
+                <p className="w-full whitespace-nowrap text-[21px] font-semibold leading-tight tracking-tight text-white">
                   AlgoChat
                 </p>
-                <p className="mt-1 w-full whitespace-nowrap text-[12px] font-semibold uppercase tracking-[0.28em] text-white/70">
+                <p className="mt-1 w-full whitespace-nowrap text-[11px] font-semibold uppercase tracking-[0.18em] text-white/70">
                   WhatsApp CRM
                 </p>
               </div>

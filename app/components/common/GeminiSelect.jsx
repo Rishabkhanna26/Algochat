@@ -103,7 +103,7 @@ export default function GeminiSelect({
 
         <span className="relative z-10 flex min-w-0 items-center gap-3 font-medium">
           <span className={`aa-select__dot h-3 w-3 shrink-0 rounded-full ${isVibrant ? 'bg-white' : 'bg-[#FDA913]'}`} />
-          <span className="truncate">{selectedLabel}</span>
+          <span className="min-w-0 flex-1 break-words text-left leading-tight whitespace-normal">{selectedLabel}</span>
         </span>
 
         <FontAwesomeIcon
@@ -148,7 +148,7 @@ export default function GeminiSelect({
                 }`.trim()}
               >
                 <span className="aa-select__dot h-3 w-3 shrink-0 rounded-full bg-[#FDA913]" />
-                <span className="truncate">{option.label}</span>
+                <span className="min-w-0 flex-1 break-words text-left leading-tight whitespace-normal">{option.label}</span>
               </button>
             );
           })}

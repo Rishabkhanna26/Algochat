@@ -14,6 +14,7 @@ import Card from '../components/common/Card.jsx';
 import Button from '../components/common/Button.jsx';
 import Input from '../components/common/Input.jsx';
 import Badge from '../components/common/Badge.jsx';
+import GeminiSelect from '../components/common/GeminiSelect.jsx';
 import { useAuth } from '../components/auth/AuthProvider.jsx';
 import { useToast } from '../components/common/ToastProvider.jsx';
 
@@ -59,10 +60,19 @@ const formatInr = (value) => {
   }
 };
 
+const getPurchaseLabel = (purpose) => {
+  if (purpose === 'dashboard') return 'Dashboard Subscription';
+  if (purpose === 'business_type_change') return 'Business Type Change';
+  if (purpose === 'prepaid') return 'Prepaid Tokens';
+  return 'Pay-as-you-go';
+};
+
 export default function BillingPage() {
   const router = useRouter();
   const { user } = useAuth();
   const { pushToast } = useToast();
+  const canUseTokenSystem =
+    user?.admin_tier === 'super_admin' || user?.token_system_enabled === true;
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -84,6 +94,7 @@ export default function BillingPage() {
   const [purchases, setPurchases] = useState([]);
   const [purchasesLoading, setPurchasesLoading] = useState(false);
   const [purchasesStatus, setPurchasesStatus] = useState('');
+  const [deletingPurchaseId, setDeletingPurchaseId] = useState(null);
   const [dashboardForm, setDashboardForm] = useState({
     service_inr: '',
     product_inr: '',
@@ -404,11 +415,35 @@ export default function BillingPage() {
     }
   };
 
+  const openPaymentUrl = useCallback((url) => {
+    if (!url) return;
+    const popup = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!popup) {
+      window.location.href = url;
+    }
+  }, []);
+
   const createPaygPaymentLink = async () => {
+    if (!canUseTokenSystem) {
+      pushToast({
+        type: 'error',
+        title: 'Not allowed',
+        message: 'Token billing is disabled for your account.',
+      });
+      return;
+    }
     router.push('/billing/checkout?type=payg');
   };
 
   const createPrepaidPaymentLink = async () => {
+    if (!canUseTokenSystem) {
+      pushToast({
+        type: 'error',
+        title: 'Not allowed',
+        message: 'Token billing is disabled for your account.',
+      });
+      return;
+    }
     const amount = toNumber(prepaidAmount, 0);
     if (amount < minTopupInr) {
       pushToast({
@@ -452,8 +487,71 @@ export default function BillingPage() {
       }
       setActionStatus('Payment verified.');
       await loadSummary();
+      await loadPurchases();
     } catch (err) {
       setActionStatus(err.message || 'Failed to verify payment.');
+    }
+  };
+
+  const downloadPurchaseInvoice = useCallback(async (purchase) => {
+    const purchaseId = Number(purchase?.id || 0);
+    if (!purchaseId) return;
+    try {
+      const response = await fetch(`/api/payments/invoice?purchase_id=${encodeURIComponent(purchaseId)}`, {
+        method: 'GET',
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || 'Failed to download invoice PDF.');
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `invoice-${purchaseId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      pushToast({
+        type: 'success',
+        title: 'Saved',
+        message: 'Invoice PDF downloaded.',
+      });
+    } catch (_error) {
+      pushToast({
+        type: 'error',
+        title: 'Not saved',
+        message: 'Failed to download invoice PDF.',
+      });
+    }
+  }, [pushToast]);
+
+  const deletePurchaseHistory = async (purchase) => {
+    const purchaseId = Number(purchase?.id || 0);
+    if (!purchaseId) return;
+    const confirmed = window.confirm('Delete this payment history entry?');
+    if (!confirmed) return;
+    setDeletingPurchaseId(purchaseId);
+    setPurchasesStatus('');
+    try {
+      const response = await fetchPaymentsApi('/purchases', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purchase_id: purchaseId }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || 'Failed to delete payment history.');
+      }
+      setPurchasesStatus('Payment history deleted.');
+      await loadPurchases();
+      await loadSummary();
+    } catch (err) {
+      setPurchasesStatus(err.message || 'Failed to delete payment history.');
+    } finally {
+      setDeletingPurchaseId(null);
     }
   };
 
@@ -495,7 +593,11 @@ export default function BillingPage() {
   const dashboardProfile = dashboard?.profile || {};
   const dashboardAmounts = dashboard?.amounts || {};
   const minTopupInr = toNumber(summary?.prepaid?.min_topup_inr, 500);
-  const purchaseTotal = purchases.reduce((sum, purchase) => sum + Number(purchase.amount || 0), 0);
+  const purchaseTotalPaid = purchases.reduce((sum, purchase) => {
+    if (String(purchase?.status || '').toLowerCase() !== 'paid') return sum;
+    const paidValue = Number(purchase?.paid_amount || purchase?.amount || 0);
+    return sum + (Number.isFinite(paidValue) ? paidValue : 0);
+  }, 0);
 
   const resolveDashboardRate = (value, fallback) => {
     const num = Number(value);
@@ -577,8 +679,14 @@ export default function BillingPage() {
   return (
     <div className="space-y-6 p-4 sm:p-6">
       <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-aa-dark-blue">Billing & Tokens</h1>
-        <p className="text-aa-gray mt-1">Manage free tokens, prepaid top-ups, and pay-as-you-go charges.</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-aa-dark-blue">
+          {canUseTokenSystem ? 'Billing & Tokens' : 'Billing'}
+        </h1>
+        <p className="text-aa-gray mt-1">
+          {canUseTokenSystem
+            ? 'Manage free tokens, prepaid top-ups, and pay-as-you-go charges.'
+            : 'Your token system is disabled. Dashboard access controls remain available.'}
+        </p>
       </div>
 
       {error && (
@@ -587,6 +695,17 @@ export default function BillingPage() {
         </div>
       )}
 
+      {!canUseTokenSystem && (
+        <Card className="border border-gray-200 bg-white">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-sm text-aa-gray">
+            Token balances, token purchases, and monthly token billing are disabled for your admin account.
+            Contact your super admin if you need token billing access.
+          </div>
+        </Card>
+      )}
+
+      {canUseTokenSystem && (
+      <>
       <Card className="border border-gray-200 bg-white">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -682,7 +801,11 @@ export default function BillingPage() {
           </div>
         )}
       </Card>
+      </>
+      )}
 
+      {canUseTokenSystem && (
+      <>
       <Card className="border border-gray-200 bg-white">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -739,7 +862,7 @@ export default function BillingPage() {
               {paygLink?.short_url && (
                 <Button
                   variant="outline"
-                  onClick={() => window.open(paygLink.short_url, '_blank', 'noopener,noreferrer')}
+                  onClick={() => openPaymentUrl(paygLink.short_url)}
                 >
                   Open Payment Link
                 </Button>
@@ -753,7 +876,11 @@ export default function BillingPage() {
           </div>
         </div>
       </Card>
+      </>
+      )}
 
+      {canUseTokenSystem && (
+      <>
       <Card className="border border-gray-200 bg-white">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -823,7 +950,7 @@ export default function BillingPage() {
               {prepaidLink?.short_url && (
                 <Button
                   variant="outline"
-                  onClick={() => window.open(prepaidLink.short_url, '_blank', 'noopener,noreferrer')}
+                  onClick={() => openPaymentUrl(prepaidLink.short_url)}
                 >
                   Open Payment Link
                 </Button>
@@ -837,6 +964,8 @@ export default function BillingPage() {
           </div>
         </div>
       </Card>
+      </>
+      )}
 
       <Card className="border border-gray-200 bg-white">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1002,93 +1131,114 @@ export default function BillingPage() {
             </div>
 
             {dashboardChargeEnabled && (
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+              <div className="rounded-2xl border border-[#f1dcc5] bg-gradient-to-br from-white via-[#fff8ef] to-[#fff1dd] px-4 py-4">
                 <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-6">
                   <div className="flex-1">
-                    <p className="text-xs uppercase tracking-[0.28em] text-aa-gray">
-                      Renew Dashboard Access
-                    </p>
-                    <p className="mt-1 text-sm text-aa-text-dark">
-                      Choose a plan length. Longer plans unlock discounts.
-                    </p>
-                    <div className="mt-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
-                      <p className="text-xs uppercase tracking-[0.18em] text-aa-gray">Renewal Profile</p>
-                      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-[#f3d9b8] bg-white p-4 sm:p-5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                          <label className="text-xs font-semibold text-aa-gray">Business profile</label>
-                          <select
+                          <p className="text-xs uppercase tracking-[0.24em] text-aa-gray">
+                            Renew Dashboard Access
+                          </p>
+                          <p className="mt-1 text-sm font-medium text-aa-text-dark">
+                            Choose a plan length. Longer plans unlock discounts.
+                          </p>
+                        </div>
+                        <span className="self-start rounded-full bg-[#fff3e2] px-3 py-1 text-xs font-semibold whitespace-nowrap text-aa-dark-blue">
+                          Live renewal
+                        </span>
+                      </div>
+
+                      <div className="mt-4 rounded-2xl border border-[#f2dfc2] bg-[#fffaf2] p-4">
+                        <p className="text-xs uppercase tracking-[0.18em] text-aa-gray">Renewal Profile</p>
+                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <GeminiSelect
+                            label="Business profile"
                             value={resolvedRenewProfile}
-                            onChange={(event) => {
-                              const nextType = event.target.value;
+                            onChange={(value) => {
+                              const nextType = value;
                               setRenewProfileType(nextType);
                               setRenewProfileTouched(true);
                               if (nextType === 'product') {
                                 setRenewBookingEnabled(false);
                               }
                             }}
-                            className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-aa-text-dark focus:border-aa-orange focus:outline-none"
-                          >
-                            <option value="service">{serviceLabel}-based</option>
-                            <option value="product">{productLabel}-based</option>
-                            <option value="both">{productLabel} + {serviceLabel}</option>
-                          </select>
+                            options={[
+                              { value: 'service', label: `${serviceLabel}-based` },
+                              { value: 'product', label: `${productLabel}-based` },
+                              { value: 'both', label: `${productLabel} + ${serviceLabel}` },
+                            ]}
+                            variant="vibrant"
+                            size="sm"
+                          />
+                          <div className="rounded-xl border border-[#f2dfc2] bg-white p-3">
+                            <p className="text-xs font-semibold text-aa-gray">Booking add-on</p>
+                            <label
+                              className={`mt-2 flex w-full items-start gap-2 text-sm leading-relaxed ${
+                                bookingAddonAllowed ? 'text-aa-text-dark' : 'text-aa-gray'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={resolvedRenewBooking}
+                                onChange={(event) => {
+                                  setRenewBookingEnabled(event.target.checked);
+                                  setRenewProfileTouched(true);
+                                }}
+                                disabled={!bookingAddonAllowed}
+                                className="mt-0.5 h-4 w-4 shrink-0"
+                              />
+                              <span className="min-w-0 break-words">
+                                Include booking add-on
+                                {dashboardRates.booking_inr ? ` (+${formatInr(dashboardRates.booking_inr)}/month)` : ''}
+                              </span>
+                            </label>
+                            {!bookingAddonAllowed && (
+                              <p className="mt-1 text-xs text-aa-gray">
+                                Booking add-on is available for service or combined profiles.
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex flex-col justify-between">
-                          <label className="text-xs font-semibold text-aa-gray">Booking add-on</label>
-                          <label className={`mt-2 inline-flex items-center gap-2 text-sm ${bookingAddonAllowed ? 'text-aa-text-dark' : 'text-aa-gray'}`}>
-                            <input
-                              type="checkbox"
-                              checked={resolvedRenewBooking}
-                              onChange={(event) => {
-                                setRenewBookingEnabled(event.target.checked);
-                                setRenewProfileTouched(true);
-                              }}
-                              disabled={!bookingAddonAllowed}
-                            />
-                            Include booking add-on{dashboardRates.booking_inr ? ` (+${formatInr(dashboardRates.booking_inr)}/month)` : ''}
-                          </label>
-                          {!bookingAddonAllowed && (
-                            <p className="mt-1 text-xs text-aa-gray">Booking add-on is available for service or combined profiles.</p>
-                          )}
-                        </div>
+                        <p className="mt-3 text-xs text-aa-gray">
+                          Changing the profile here will update your account once the payment is verified.
+                        </p>
                       </div>
-                      <p className="mt-3 text-xs text-aa-gray">
-                        Changing the profile here will update your account once the payment is verified.
-                      </p>
-                    </div>
-                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
-                          {dashboardOfferOptions.map((option) => {
-                            const isSelected = option.months === selectedDashboardMonths;
-                            return (
-                              <button
-                                key={`dashboard-offer-${option.months}`}
-                                type="button"
-                                onClick={() => setDashboardMonths(String(option.months))}
-                                className={`group rounded-2xl border px-4 py-4 text-left text-sm transition ${
-                                  isSelected
-                                    ? 'border-aa-orange bg-white text-aa-text-dark shadow-[0_12px_30px_rgba(255,107,53,0.15)]'
-                                    : 'border-gray-200 bg-white text-aa-gray hover:border-aa-orange/60 hover:text-aa-text-dark'
-                                }`}
-                              >
-                                <div className="flex flex-col items-center text-center gap-2">
-                                  <div className="text-base font-semibold">{option.label}</div>
-                                  <span
-                                    className={`inline-flex items-center justify-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                                      option.discount
-                                        ? 'bg-amber-100 text-amber-700'
-                                        : 'bg-gray-100 text-gray-500'
-                                    }`}
-                                  >
-                                    {option.discount ? `${option.discount}% off` : 'Standard'}
-                                  </span>
-                                  <div className="text-xs text-aa-gray">
-                                    {option.months === 1 ? 'Pay monthly' : `Billed once for ${option.months} months`}
-                                  </div>
+
+                      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4">
+                        {dashboardOfferOptions.map((option) => {
+                          const isSelected = option.months === selectedDashboardMonths;
+                          return (
+                            <button
+                              key={`dashboard-offer-${option.months}`}
+                              type="button"
+                              onClick={() => setDashboardMonths(String(option.months))}
+                              className={`group h-full rounded-2xl border px-4 py-4 text-left text-sm transition ${
+                                isSelected
+                                  ? 'border-aa-orange bg-white text-aa-text-dark shadow-[0_12px_30px_rgba(255,107,53,0.15)]'
+                                  : 'border-gray-200 bg-white text-aa-gray hover:border-aa-orange/60 hover:text-aa-text-dark'
+                              }`}
+                            >
+                              <div className="flex h-full flex-col gap-2">
+                                <div className="text-base font-semibold">{option.label}</div>
+                                <span
+                                  className={`inline-flex w-fit items-center justify-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                                    option.discount
+                                      ? 'bg-amber-100 text-amber-700'
+                                      : 'bg-gray-100 text-gray-500'
+                                  }`}
+                                >
+                                  {option.discount ? `${option.discount}% off` : 'Standard'}
+                                </span>
+                                <div className="text-xs text-aa-gray">
+                                  {option.months === 1 ? 'Pay monthly' : `Billed once for ${option.months} months`}
                                 </div>
-                              </button>
-                            );
-                          })}
-                        </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                   <div className="w-full lg:w-auto lg:min-w-[320px]">
                     <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -1168,15 +1318,14 @@ export default function BillingPage() {
           </div>
         )}
       </Card>
-
       <Card className="border border-gray-200 bg-white">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-aa-text-dark">Purchase History</h2>
             <p className="text-xs text-aa-gray">
               {user?.admin_tier === 'super_admin'
-                ? 'All admin payments and token purchases.'
-                : 'Your payment and token purchase history.'}
+                ? 'All admin payments, subscriptions, and token purchases.'
+                : 'Your payment history and subscription purchases.'}
             </p>
           </div>
           <Button variant="outline" onClick={loadPurchases} disabled={purchasesLoading}>
@@ -1201,7 +1350,7 @@ export default function BillingPage() {
         ) : (
           <div className="mt-4 space-y-3">
             <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-aa-text-dark">
-              Total purchased: <span className="font-semibold">{formatInr(purchaseTotal)}</span>
+              Total paid: <span className="font-semibold">{formatInr(purchaseTotalPaid)}</span>
             </div>
             {purchases.map((purchase) => {
               const total = Number(purchase.amount || 0);
@@ -1209,7 +1358,7 @@ export default function BillingPage() {
               const maintenanceFee = Number(purchase.maintenance_fee || 0);
               const isPrepaid = purchase.purpose === 'prepaid';
               const isDashboard = purchase.purpose === 'dashboard';
-              const label = isDashboard ? 'Dashboard Subscription' : isPrepaid ? 'Prepaid Tokens' : 'Pay-as-you-go';
+              const label = getPurchaseLabel(purchase.purpose);
               return (
                 <div key={purchase.id} className="rounded-xl border border-gray-200 bg-gray-50 p-4">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1235,7 +1384,7 @@ export default function BillingPage() {
                     <span>Maintenance (12%): {formatInr(maintenanceFee)}</span>
                     <span>Total: {formatInr(total)}</span>
                   </div>
-                  {isPrepaid && (
+                  {isPrepaid && canUseTokenSystem && (
                     <div className="mt-2 text-xs text-aa-gray">
                       Tokens: {purchase.input_tokens || 0} input + {purchase.output_tokens || 0} output
                     </div>
@@ -1250,6 +1399,24 @@ export default function BillingPage() {
                       Paid at: {new Date(purchase.paid_at).toLocaleString('en-IN')}
                     </div>
                   )}
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {purchase.status === 'paid' && (
+                      <Button
+                        variant="outline"
+                        onClick={() => downloadPurchaseInvoice(purchase)}
+                      >
+                        Download Invoice
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      onClick={() => deletePurchaseHistory(purchase)}
+                      disabled={deletingPurchaseId === purchase.id}
+                      className="text-red-600 hover:bg-red-50"
+                    >
+                      {deletingPurchaseId === purchase.id ? 'Deleting...' : 'Delete'}
+                    </Button>
+                  </div>
                 </div>
               );
             })}
@@ -1257,6 +1424,8 @@ export default function BillingPage() {
         )}
       </Card>
 
+      {canUseTokenSystem && (
+      <>
       <Card className="border border-gray-200 bg-white">
         <h3 className="text-base font-semibold text-aa-text-dark">Razorpay Payout Keys</h3>
         <p className="mt-1 text-xs text-aa-gray">
@@ -1415,6 +1584,8 @@ export default function BillingPage() {
             </div>
           )}
         </Card>
+      )}
+      </>
       )}
 
       {actionStatus && <div className="text-sm text-aa-gray">{actionStatus}</div>}

@@ -13,11 +13,11 @@ import {
   faLayerGroup,
   faLock,
   faPhone,
-  faStore,
   faUser,
   faUserPlus,
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../components/auth/AuthProvider.jsx';
+import GeminiSelect from '../components/common/GeminiSelect.jsx';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -61,6 +61,17 @@ export default function SignupPage() {
       hint: 'Focus on services, bookings and appointments.',
     },
   ];
+  const businessCategoryChoices = [
+    { value: 'Retail', label: 'Retail' },
+    { value: 'Services', label: 'Services' },
+    { value: 'Retail + Services', label: 'Retail + Services' },
+    { value: 'Food & Beverage', label: 'Food & Beverage' },
+    { value: 'Beauty & Wellness', label: 'Beauty & Wellness' },
+    { value: 'Education & Coaching', label: 'Education & Coaching' },
+    { value: 'Other', label: 'Other' },
+  ];
+  const selectedBusinessTypeChoice =
+    businessTypeChoices.find((choice) => choice.value === form.businessType) || businessTypeChoices[0];
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -361,7 +372,7 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <div className="relative z-10 w-full max-w-lg">
+          <div className="relative z-10 w-full max-w-2xl">
             <div className="mb-7 flex justify-center lg:hidden aa-auth-reveal-up" style={{ animationDelay: '140ms' }}>
               <div className="rounded-2xl border border-white/70 bg-white/90 p-2.5 shadow-[0_14px_34px_rgba(15,23,42,0.2)]">
                 <Image
@@ -375,11 +386,21 @@ export default function SignupPage() {
               </div>
             </div>
 
-            <div className="aa-auth-card rounded-3xl border border-white/80 bg-white/90 p-7 shadow-[0_30px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-8 aa-auth-card-reveal">
-              <h1 className="mb-2 text-3xl font-black text-slate-900 aa-auth-reveal-up" style={{ animationDelay: '120ms' }}>Create account</h1>
-              <p className="mb-6 text-sm text-slate-500 aa-auth-reveal-up" style={{ animationDelay: '180ms' }}>
-                Set up your workspace for product and service workflows.
-              </p>
+            <div className="aa-auth-card rounded-3xl border border-white/80 bg-white/90 p-8 shadow-[0_30px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-9 aa-auth-card-reveal">
+              <div
+                className="mb-6 rounded-2xl border border-[#ffd8b0] bg-gradient-to-r from-[#fff7ee] via-[#fffaf5] to-white p-4 aa-auth-reveal-up sm:p-5"
+                style={{ animationDelay: '120ms' }}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-aa-orange">
+                  New Workspace
+                </p>
+                <h1 className="mt-2 text-3xl font-black leading-tight text-slate-900 sm:text-4xl">
+                  Create account
+                </h1>
+                <p className="mt-2 text-sm text-slate-600">
+                  Set up your workspace for product and service workflows.
+                </p>
+              </div>
 
               {error && (
                 <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -427,7 +448,7 @@ export default function SignupPage() {
                     </div>
 
                     <div
-                      className="rounded-2xl border border-slate-200/90 bg-slate-50/70 p-4 aa-auth-reveal-up"
+                      className="relative z-20 rounded-2xl border border-slate-200/90 bg-slate-50/70 p-5 aa-auth-reveal-up"
                       style={{ animationDelay: '390ms' }}
                     >
                       <div className="mb-3 flex items-center gap-2 text-[13px] font-semibold text-slate-700">
@@ -438,59 +459,49 @@ export default function SignupPage() {
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                        <AuthField
-                          label="Business Category"
-                          icon={<FontAwesomeIcon icon={faStore} style={{ fontSize: 13 }} />}
-                          value={form.businessCategory}
-                          onChange={update('businessCategory')}
-                          placeholder="Retail, Services..."
-                        />
+                        <div>
+                          <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                            Business Category
+                          </label>
+                          <GeminiSelect
+                            value={form.businessCategory}
+                            onChange={(value) => setForm((prev) => ({ ...prev, businessCategory: value }))}
+                            options={businessCategoryChoices}
+                            variant="vibrant"
+                            size="sm"
+                            menuClassName="z-50"
+                            placeholder="Retail, Services..."
+                          />
+                        </div>
 
                         <div>
                           <label className="mb-1.5 block text-sm font-semibold text-slate-700">
                             Business Type
                           </label>
-                          <select
+                          <GeminiSelect
                             value={form.businessType}
-                            onChange={(e) =>
-                              setForm((prev) => ({ ...prev, businessType: e.target.value }))
-                            }
-                            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-900 outline-none transition focus:border-aa-orange focus:ring-2 focus:ring-orange-100"
-                          >
-                            {businessTypeChoices.map((choice) => (
-                              <option key={choice.value} value={choice.value}>
-                                {choice.label}
-                              </option>
-                            ))}
-                          </select>
+                            onChange={(value) => setForm((prev) => ({ ...prev, businessType: value }))}
+                            options={businessTypeChoices.map((choice) => ({
+                              value: choice.value,
+                              label: choice.label,
+                            }))}
+                            variant="vibrant"
+                            size="sm"
+                            menuClassName="z-50"
+                          />
                         </div>
                       </div>
 
-                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        {businessTypeChoices.map((choice) => {
-                          const selected = form.businessType === choice.value;
-                          return (
-                            <button
-                              key={choice.value}
-                              type="button"
-                              onClick={() =>
-                                setForm((prev) => ({ ...prev, businessType: choice.value }))
-                              }
-                              className={`rounded-xl border px-3 py-2.5 text-left transition ${
-                                selected
-                                  ? 'border-aa-orange/60 bg-gradient-to-r from-orange-50 to-blue-50 shadow-[0_10px_18px_rgba(15,74,158,0.12)]'
-                                  : 'border-slate-200 bg-white hover:border-aa-dark-blue/35 hover:bg-slate-50'
-                              }`}
-                            >
-                              <p className="text-[12px] font-semibold text-slate-800">
-                                {choice.label}
-                              </p>
-                              <p className="mt-1 text-[11px] leading-relaxed text-slate-500">
-                                {choice.hint}
-                              </p>
-                            </button>
-                          );
-                        })}
+                      <div className="mt-3 rounded-xl border border-gray-200 bg-white px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-aa-gray">
+                          Selected Plan
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-aa-text-dark">
+                          {selectedBusinessTypeChoice?.label}
+                        </p>
+                        <p className="mt-1 text-[12px] leading-relaxed text-slate-500">
+                          {selectedBusinessTypeChoice?.hint}
+                        </p>
                       </div>
                     </div>
 
@@ -539,7 +550,7 @@ export default function SignupPage() {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-sm font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
+                      className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-sm font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
                       style={{ animationDelay: '540ms' }}
                     >
                       <FontAwesomeIcon icon={faUserPlus} />
@@ -558,7 +569,7 @@ export default function SignupPage() {
                     onClick={() => {
                       window.location.href = '/api/auth/google/start';
                     }}
-                    className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50 aa-auth-reveal-up"
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50 aa-auth-reveal-up"
                     style={{ animationDelay: '640ms' }}
                   >
                     <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -592,7 +603,7 @@ export default function SignupPage() {
                   <button
                     type="submit"
                     disabled={verifyLoading}
-                    className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-sm font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
+                    className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-sm font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
                     style={{ animationDelay: '360ms' }}
                   >
                     <FontAwesomeIcon icon={faUserPlus} />
@@ -604,7 +615,7 @@ export default function SignupPage() {
                       type="button"
                       disabled={resendLoading || verifyLoading}
                       onClick={handleResendCode}
-                      className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {resendLoading ? 'Resending...' : 'Resend Code'}
                     </button>
@@ -617,7 +628,7 @@ export default function SignupPage() {
                         setSuccess('');
                         setError('');
                       }}
-                      className="h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       Edit Details
                     </button>
@@ -709,8 +720,8 @@ function AuthField({ label, icon, rightElement, ...props }) {
         <input
           {...props}
           required
-          className={`h-11 w-full rounded-xl border border-slate-200 bg-white text-sm text-slate-900 outline-none transition focus:border-aa-orange focus:ring-2 focus:ring-orange-100 ${
-            icon ? 'pl-9' : 'px-3'
+          className={`h-12 w-full rounded-xl border border-slate-200 bg-white text-sm text-slate-900 outline-none transition focus:border-aa-orange focus:ring-2 focus:ring-orange-100 ${
+            icon ? 'pl-10' : 'px-3'
           } ${rightElement ? 'pr-11' : 'pr-3'}`}
         />
         {rightElement && (

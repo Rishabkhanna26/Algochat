@@ -57,6 +57,20 @@ body {
   overflow-wrap: anywhere;
 }
 
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+label,
+th,
+td {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 img,
 video,
 canvas,
@@ -701,10 +715,11 @@ table {
 }
 
 [data-testid='inbox-page'] .inbox-thread-preview {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  display: block;
+  overflow: visible;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 [data-testid='inbox-page'] .inbox-thread-item-active::before {

@@ -49,6 +49,66 @@ const FREE_DELIVERY_SCOPE_OPTIONS = [
   { value: 'eligible_only', label: 'Only marked products' },
 ];
 
+const formatHourAmPm = (hour) => {
+  const normalized = ((Number(hour) % 24) + 24) % 24;
+  const suffix = normalized >= 12 ? 'PM' : 'AM';
+  const hour12 = normalized % 12 || 12;
+  return `${hour12} ${suffix}`;
+};
+
+const toBusinessHoursRange = (startHour, endHour) =>
+  `${formatHourAmPm(startHour)} - ${formatHourAmPm(endHour)}`;
+
+const parseBusinessHoursRange = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const match = value.match(
+    /(\d{1,2})(?::\d{1,2})?\s*(am|pm)\s*(?:to|-|–|—)\s*(\d{1,2})(?::\d{1,2})?\s*(am|pm)/i
+  );
+  if (!match) return null;
+  const to24Hour = (rawHour, rawPeriod) => {
+    const hour = Number.parseInt(rawHour, 10);
+    if (!Number.isFinite(hour) || hour < 1 || hour > 12) return null;
+    const period = String(rawPeriod || '').toLowerCase();
+    if (period === 'am') return hour % 12;
+    if (period === 'pm') return (hour % 12) + 12;
+    return null;
+  };
+  const start = to24Hour(match[1], match[2]);
+  const end = to24Hour(match[3], match[4]);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  return { start, end };
+};
+
+const BUSINESS_HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
+  value: hour,
+  label: formatHourAmPm(hour),
+}));
+
+const normalizeFreeDeliveryProductRules = (rules) => {
+  if (!Array.isArray(rules)) return [];
+  const seen = new Set();
+  const normalized = [];
+  rules.forEach((entry) => {
+    const productIdRaw =
+      entry?.catalog_item_id ?? entry?.catalogItemId ?? entry?.product_id ?? entry?.productId;
+    const minAmountRaw = entry?.min_amount ?? entry?.minAmount;
+    const productNameRaw =
+      entry?.product_name ?? entry?.productName ?? entry?.name ?? '';
+    const productId = Math.trunc(Number(productIdRaw));
+    const minAmount = Number(minAmountRaw);
+    if (!Number.isFinite(productId) || productId <= 0) return;
+    if (!Number.isFinite(minAmount) || minAmount <= 0) return;
+    if (seen.has(productId)) return;
+    seen.add(productId);
+    normalized.push({
+      catalog_item_id: String(productId),
+      min_amount: String(Number(minAmount.toFixed(2))),
+      product_name: String(productNameRaw || ''),
+    });
+  });
+  return normalized.slice(0, 100);
+};
+
 const InfoHint = ({ text }) => {
   const [open, setOpen] = useState(false);
   return (
@@ -87,9 +147,11 @@ export default function SettingsPage() {
     business_address: '',
     business_hours: '',
     business_map_url: '',
+    two_factor_enabled: false,
     free_delivery_enabled: false,
     free_delivery_min_amount: '',
     free_delivery_scope: 'combined',
+    free_delivery_product_rules: [],
   });
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
@@ -123,6 +185,8 @@ export default function SettingsPage() {
   });
   const [passwordStatus, setPasswordStatus] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [twoFactorSaving, setTwoFactorSaving] = useState(false);
+  const [twoFactorStatus, setTwoFactorStatus] = useState('');
   const [whatsappConfig, setWhatsappConfig] = useState({
     phone: '',
     businessName: '',
@@ -148,11 +212,64 @@ export default function SettingsPage() {
   const [freeDeliveryProducts, setFreeDeliveryProducts] = useState([]);
   const [freeDeliveryLoading, setFreeDeliveryLoading] = useState(false);
   const [freeDeliveryError, setFreeDeliveryError] = useState('');
-  const [freeDeliverySelection, setFreeDeliverySelection] = useState([]);
-  const [freeDeliverySearch, setFreeDeliverySearch] = useState('');
-  const [freeDeliveryTouched, setFreeDeliveryTouched] = useState(false);
   const restrictedMode = isRestrictedModeUser(user);
   const productAccess = Boolean(user?.id) && (restrictedMode || hasProductAccess(user));
+  const eligibleFreeDeliveryProducts = freeDeliveryProducts.filter(
+    (item) => item?.item_type === 'product' && item?.is_active && item?.free_delivery_eligible
+  );
+  const parsedBusinessHours = parseBusinessHoursRange(profile.business_hours);
+  const businessStartHour = parsedBusinessHours?.start ?? 10;
+  const businessEndHour = parsedBusinessHours?.end ?? 19;
+  const eligibleFreeDeliveryProductOptions = eligibleFreeDeliveryProducts.map((item) => ({
+    value: String(item.id),
+    label: item.name || `Product #${item.id}`,
+  }));
+
+  const setFreeDeliveryRuleAt = (index, nextRule) => {
+    setProfile((prev) => {
+      const currentRules = Array.isArray(prev.free_delivery_product_rules)
+        ? prev.free_delivery_product_rules
+        : [];
+      const nextRules = [...currentRules];
+      nextRules[index] = { ...(nextRules[index] || {}), ...nextRule };
+      return {
+        ...prev,
+        free_delivery_product_rules: nextRules,
+      };
+    });
+  };
+
+  const addFreeDeliveryRule = () => {
+    setProfile((prev) => {
+      const currentRules = Array.isArray(prev.free_delivery_product_rules)
+        ? prev.free_delivery_product_rules
+        : [];
+      if (currentRules.length >= 100) return prev;
+      return {
+        ...prev,
+        free_delivery_product_rules: [
+          ...currentRules,
+          {
+            catalog_item_id: '',
+            min_amount: '',
+            product_name: '',
+          },
+        ],
+      };
+    });
+  };
+
+  const removeFreeDeliveryRule = (index) => {
+    setProfile((prev) => {
+      const currentRules = Array.isArray(prev.free_delivery_product_rules)
+        ? prev.free_delivery_product_rules
+        : [];
+      return {
+        ...prev,
+        free_delivery_product_rules: currentRules.filter((_, idx) => idx !== index),
+      };
+    });
+  };
 
   const getToastTone = useCallback((message, fallback = 'success') => {
     const text = String(message || '').toLowerCase();
@@ -410,7 +527,10 @@ export default function SettingsPage() {
       }
       setPaymentLink(payload?.data || null);
       if (payload?.data?.short_url) {
-        window.open(payload.data.short_url, '_blank', 'noopener,noreferrer');
+        const popup = window.open(payload.data.short_url, '_blank', 'noopener,noreferrer');
+        if (!popup) {
+          window.location.href = payload.data.short_url;
+        }
       }
     } catch (error) {
       setPaymentActionStatus(error.message || 'Failed to create payment link.');
@@ -524,12 +644,19 @@ export default function SettingsPage() {
         business_address: user.business_address || prev.business_address,
         business_hours: user.business_hours || prev.business_hours,
         business_map_url: user.business_map_url || prev.business_map_url,
+        two_factor_enabled:
+          user.two_factor_enabled != null
+            ? Boolean(user.two_factor_enabled)
+            : Boolean(prev.two_factor_enabled),
         free_delivery_enabled: Boolean(user.free_delivery_enabled ?? prev.free_delivery_enabled),
         free_delivery_min_amount:
           user.free_delivery_min_amount != null
             ? String(user.free_delivery_min_amount)
             : prev.free_delivery_min_amount,
         free_delivery_scope: user.free_delivery_scope || prev.free_delivery_scope,
+        free_delivery_product_rules: normalizeFreeDeliveryProductRules(
+          user.free_delivery_product_rules || prev.free_delivery_product_rules
+        ),
       }));
     }
   }, [user]);
@@ -558,10 +685,14 @@ export default function SettingsPage() {
           business_address: data.data?.business_address || '',
           business_hours: data.data?.business_hours || '',
           business_map_url: data.data?.business_map_url || '',
+          two_factor_enabled: Boolean(data.data?.two_factor_enabled),
           free_delivery_enabled: Boolean(data.data?.free_delivery_enabled),
           free_delivery_min_amount:
             data.data?.free_delivery_min_amount != null ? String(data.data.free_delivery_min_amount) : '',
           free_delivery_scope: data.data?.free_delivery_scope || 'combined',
+          free_delivery_product_rules: normalizeFreeDeliveryProductRules(
+            data.data?.free_delivery_product_rules
+          ),
         });
         setProfilePhotoPreview(data.data?.profile_photo_url || null);
         if (data.data?.whatsapp_number || data.data?.whatsapp_name) {
@@ -590,6 +721,42 @@ export default function SettingsPage() {
     }
     loadProfile();
   }, [authLoading, normalizePairingPhone, user]);
+
+  useEffect(() => {
+    if (!user?.id || !productAccess) return;
+    let isMounted = true;
+    const loadFreeDeliveryProducts = async () => {
+      try {
+        setFreeDeliveryLoading(true);
+        setFreeDeliveryError('');
+        const response = await fetch('/api/catalog?limit=500', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data?.error || 'Could not load products for free-delivery rules.');
+        }
+        if (!isMounted) return;
+        const nextProducts = Array.isArray(data?.data)
+          ? data.data.filter((item) => item?.item_type === 'product')
+          : [];
+        setFreeDeliveryProducts(nextProducts);
+      } catch (error) {
+        if (!isMounted) return;
+        setFreeDeliveryProducts([]);
+        setFreeDeliveryError(error.message || 'Could not load products for free-delivery rules.');
+      } finally {
+        if (isMounted) {
+          setFreeDeliveryLoading(false);
+        }
+      }
+    };
+    loadFreeDeliveryProducts();
+    return () => {
+      isMounted = false;
+    };
+  }, [productAccess, user?.id]);
 
   useEffect(() => {
     setWhatsappConfig((prev) => ({
@@ -1180,13 +1347,13 @@ export default function SettingsPage() {
                               businessTypeRequest?.existing?.payment_link_url && (
                                 <Button
                                   variant="primary"
-                                  onClick={() =>
-                                    window.open(
-                                      businessTypeRequest.existing.payment_link_url,
-                                      '_blank',
-                                      'noopener'
-                                    )
-                                  }
+                                  onClick={() => {
+                                    const url = businessTypeRequest.existing.payment_link_url;
+                                    const popup = window.open(url, '_blank', 'noopener,noreferrer');
+                                    if (!popup) {
+                                      window.location.href = url;
+                                    }
+                                  }}
                                 >
                                   Pay Now
                                 </Button>
@@ -1222,78 +1389,79 @@ export default function SettingsPage() {
                               </div>
                             </div>
                           ) : (
-                            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                              <GeminiSelect
-                                label="Requested Business Type"
-                                value={businessTypeRequest.desired}
-                                onChange={(value) =>
-                                  setBusinessTypeRequest((prev) => ({ ...prev, desired: value }))
-                                }
-                                options={BUSINESS_TYPE_OPTIONS.filter(
-                                  (option) => option.value !== profile.business_type
-                                )}
-                                variant="vibrant"
-                              />
-                              <Input
-                                label="Reason (optional)"
-                                value={businessTypeRequest.reason}
-                                onChange={(event) =>
-                                  setBusinessTypeRequest((prev) => ({
-                                    ...prev,
-                                    reason: event.target.value,
-                                  }))
-                                }
-                                placeholder="Why do you want to change?"
-                              />
-                              <div className="flex items-end">
-                                <Button
-                                  variant="primary"
-                                  className="w-full"
-                                  onClick={async () => {
-                                    try {
-                                      setBusinessTypeRequest((prev) => ({
-                                        ...prev,
-                                        loading: true,
-                                        error: '',
-                                        success: '',
-                                      }));
-                                      const response = await fetch(
-                                        '/api/profile/business-type-request',
-                                        {
-                                          method: 'POST',
-                                          headers: { 'Content-Type': 'application/json' },
-                                          credentials: 'include',
-                                          body: JSON.stringify({
-                                            business_type: businessTypeRequest.desired,
-                                            reason: businessTypeRequest.reason,
-                                          }),
-                                        }
-                                      );
-                                      const data = await response.json();
-                                      if (!response.ok) {
-                                        throw new Error(data.error || 'Could not submit request.');
-                                      }
-                                      setBusinessTypeRequest((prev) => ({
-                                        ...prev,
-                                        existing: data.data || null,
-                                        loading: false,
-                                        success: data.data?.payment?.short_url
-                                          ? 'Request submitted. Complete payment to proceed.'
-                                          : 'Request submitted.',
-                                      }));
-                                    } catch (error) {
-                                      setBusinessTypeRequest((prev) => ({
-                                        ...prev,
-                                        loading: false,
-                                        error: error.message || 'Failed to submit request.',
-                                      }));
-                                    }
-                                  }}
-                                  disabled={businessTypeRequest.loading}
-                                >
-                                  {businessTypeRequest.loading ? 'Submitting...' : 'Submit Request'}
-                                </Button>
+                            <div className="mt-4 rounded-2xl border border-[#f3d4ac] bg-white p-4 sm:p-5">
+                              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                <GeminiSelect
+                                  label="Requested Business Type"
+                                  value={businessTypeRequest.desired}
+                                  onChange={(value) =>
+                                    setBusinessTypeRequest((prev) => ({ ...prev, desired: value }))
+                                  }
+                                  options={BUSINESS_TYPE_OPTIONS.filter(
+                                    (option) => option.value !== profile.business_type
+                                  )}
+                                  variant="vibrant"
+                                  size="sm"
+                                />
+                                <Input
+                                  label="Reason (optional)"
+                                  value={businessTypeRequest.reason}
+                                  onChange={(event) =>
+                                    setBusinessTypeRequest((prev) => ({
+                                      ...prev,
+                                      reason: event.target.value,
+                                    }))
+                                  }
+                                  placeholder="Why do you want to change?"
+                                />
                               </div>
+                              <Button
+                                variant="primary"
+                                className="mt-4 w-full rounded-2xl bg-gradient-to-r from-[#FE8802] to-[#FDA913] text-white shadow-lg shadow-[#FE8802]/20 hover:opacity-95 hover:shadow-xl hover:shadow-[#FE8802]/35"
+                                onClick={async () => {
+                                  try {
+                                    setBusinessTypeRequest((prev) => ({
+                                      ...prev,
+                                      loading: true,
+                                      error: '',
+                                      success: '',
+                                    }));
+                                    const response = await fetch(
+                                      '/api/profile/business-type-request',
+                                      {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        credentials: 'include',
+                                        body: JSON.stringify({
+                                          business_type: businessTypeRequest.desired,
+                                          reason: businessTypeRequest.reason,
+                                        }),
+                                      }
+                                    );
+                                    const data = await response.json();
+                                    if (!response.ok) {
+                                      throw new Error(data.error || 'Could not submit request.');
+                                    }
+                                    setBusinessTypeRequest((prev) => ({
+                                      ...prev,
+                                      existing: data.data || null,
+                                      loading: false,
+                                      success: data.data?.payment?.short_url
+                                        ? 'Request submitted. Complete payment to proceed.'
+                                        : 'Request submitted.',
+                                    }));
+                                  } catch (error) {
+                                    setBusinessTypeRequest((prev) => ({
+                                      ...prev,
+                                      loading: false,
+                                      error: error.message || 'Failed to submit request.',
+                                    }));
+                                  }
+                                }}
+                                disabled={businessTypeRequest.loading}
+                              >
+                                {businessTypeRequest.loading ? 'Submitting...' : 'Submit Request'}
+                              </Button>
                             </div>
                           )}
                           {(businessTypeRequest.error || businessTypeRequest.success) && (
@@ -1326,14 +1494,51 @@ export default function SettingsPage() {
                           Customers asking for location or address will get this exact detail.
                         </p>
                       </div>
-                      <Input
-                        label="Business Hours"
-                        value={profile.business_hours}
-                        onChange={(event) =>
-                          setProfile((prev) => ({ ...prev, business_hours: event.target.value }))
-                        }
-                        placeholder="10 AM to 7 PM, Monday to Saturday"
-                      />
+                      <div className="md:col-span-2 rounded-2xl border border-aa-orange/20 bg-[#fff8f1] p-4 sm:p-5">
+                        <p className="text-sm font-semibold text-aa-text-dark">Business Hours</p>
+                        <p className="mt-1 text-xs text-aa-gray">
+                          AI uses this timing when customers ask for opening/closing hours.
+                        </p>
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                          <div>
+                            <GeminiSelect
+                              label="Start Time"
+                              value={businessStartHour}
+                              onChange={(value) => {
+                                const nextStart = Number(value);
+                                if (!Number.isFinite(nextStart)) return;
+                                setProfile((prev) => ({
+                                  ...prev,
+                                  business_hours: toBusinessHoursRange(nextStart, businessEndHour),
+                                }));
+                              }}
+                              options={BUSINESS_HOUR_OPTIONS}
+                              variant="vibrant"
+                              size="sm"
+                            />
+                          </div>
+                          <div>
+                            <GeminiSelect
+                              label="End Time"
+                              value={businessEndHour}
+                              onChange={(value) => {
+                                const nextEnd = Number(value);
+                                if (!Number.isFinite(nextEnd)) return;
+                                setProfile((prev) => ({
+                                  ...prev,
+                                  business_hours: toBusinessHoursRange(businessStartHour, nextEnd),
+                                }));
+                              }}
+                              options={BUSINESS_HOUR_OPTIONS}
+                              variant="vibrant"
+                              size="sm"
+                            />
+                          </div>
+                        </div>
+                        <p className="mt-3 text-xs text-aa-gray">
+                          Saved format: {profile.business_hours || '10 AM - 7 PM'}
+                        </p>
+                      </div>
                       <Input
                         label="Map URL"
                         value={profile.business_map_url}
@@ -1372,34 +1577,141 @@ export default function SettingsPage() {
                             </label>
                           </div>
                           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                            <Input
-                              label="Free Delivery Above"
-                              type="number"
-                              value={profile.free_delivery_min_amount}
-                              onChange={(event) =>
-                                setProfile((prev) => ({
-                                  ...prev,
-                                  free_delivery_min_amount: event.target.value,
-                                }))
-                              }
-                              placeholder="1499"
-                              disabled={!profile.free_delivery_enabled}
-                            />
                             <div className="w-full">
                               <GeminiSelect
                                 label="Apply Rule To"
                                 value={profile.free_delivery_scope}
                                 onChange={(value) =>
-                                  setProfile((prev) => ({ ...prev, free_delivery_scope: value }))
+                                  setProfile((prev) => {
+                                    const nextRules = Array.isArray(prev.free_delivery_product_rules)
+                                      ? prev.free_delivery_product_rules
+                                      : [];
+                                    const shouldSeedRule =
+                                      value === 'eligible_only' && nextRules.length === 0;
+                                    return {
+                                      ...prev,
+                                      free_delivery_scope: value,
+                                      free_delivery_product_rules: shouldSeedRule
+                                        ? [{ catalog_item_id: '', min_amount: '', product_name: '' }]
+                                        : nextRules,
+                                    };
+                                  })
                                 }
                                 options={FREE_DELIVERY_SCOPE_OPTIONS}
                                 variant="vibrant"
                                 disabled={!profile.free_delivery_enabled}
                               />
                             </div>
+                            {profile.free_delivery_scope === 'combined' ? (
+                              <Input
+                                label="Free Delivery Above"
+                                type="number"
+                                value={profile.free_delivery_min_amount}
+                                onChange={(event) =>
+                                  setProfile((prev) => ({
+                                    ...prev,
+                                    free_delivery_min_amount: event.target.value,
+                                  }))
+                                }
+                                placeholder="1499"
+                                disabled={!profile.free_delivery_enabled}
+                              />
+                            ) : (
+                              <div className="rounded-xl border border-[#f1dcc5] bg-white px-4 py-3 text-sm text-aa-gray">
+                                Set product-wise thresholds below. Each selected product can have a different free-delivery amount.
+                              </div>
+                            )}
                           </div>
+
+                          {profile.free_delivery_scope === 'eligible_only' && (
+                            <div className="mt-4 rounded-2xl border border-[#f1dcc5] bg-white p-4">
+                              <div className="mb-3">
+                                <p className="text-sm font-semibold text-aa-text-dark">
+                                  Product-wise free-delivery thresholds
+                                </p>
+                                <p className="text-xs text-aa-gray">
+                                  Pick marked products and set the amount needed for each one.
+                                </p>
+                              </div>
+                              {freeDeliveryLoading ? (
+                                <p className="text-xs text-aa-gray">Loading products...</p>
+                              ) : freeDeliveryError ? (
+                                <p className="text-xs text-red-600">{freeDeliveryError}</p>
+                              ) : eligibleFreeDeliveryProducts.length === 0 ? (
+                                <p className="text-xs text-aa-gray">
+                                  No marked products found. Mark products as{' '}
+                                  <span className="font-semibold text-aa-text-dark">Free delivery eligible</span>{' '}
+                                  in Catalog first.
+                                </p>
+                              ) : (
+                                <div className="space-y-3">
+                                  {profile.free_delivery_product_rules.map((rule, index) => (
+                                    <div
+                                      key={`free-delivery-rule-${index}`}
+                                      className="grid grid-cols-1 gap-3 rounded-xl border border-[#f1dcc5] bg-[#fffaf4] p-3 md:grid-cols-[minmax(0,1fr)_150px_auto]"
+                                    >
+                                      <GeminiSelect
+                                        label={`Product ${index + 1}`}
+                                        value={String(rule?.catalog_item_id || '')}
+                                        onChange={(value) => {
+                                          const selected = eligibleFreeDeliveryProducts.find(
+                                            (item) => String(item.id) === String(value)
+                                          );
+                                          setFreeDeliveryRuleAt(index, {
+                                            catalog_item_id: String(value),
+                                            product_name: selected?.name || '',
+                                          });
+                                        }}
+                                        options={eligibleFreeDeliveryProductOptions}
+                                        variant="warm"
+                                        size="sm"
+                                        disabled={!profile.free_delivery_enabled}
+                                        placeholder="Select product"
+                                      />
+                                      <Input
+                                        label="Free Above"
+                                        type="number"
+                                        value={rule?.min_amount || ''}
+                                        onChange={(event) =>
+                                          setFreeDeliveryRuleAt(index, {
+                                            min_amount: event.target.value,
+                                          })
+                                        }
+                                        placeholder="1499"
+                                        disabled={!profile.free_delivery_enabled}
+                                      />
+                                      <div className="flex items-end">
+                                        <Button
+                                          variant="outline"
+                                          type="button"
+                                          className="w-full md:w-auto"
+                                          onClick={() => removeFreeDeliveryRule(index)}
+                                          disabled={!profile.free_delivery_enabled}
+                                        >
+                                          Remove
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={addFreeDeliveryRule}
+                                    disabled={
+                                      !profile.free_delivery_enabled ||
+                                      eligibleFreeDeliveryProducts.length === 0 ||
+                                      profile.free_delivery_product_rules.length >= 100
+                                    }
+                                  >
+                                    Add Product Rule
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           <p className="mt-3 text-xs text-aa-gray">
-                            Use <span className="font-semibold text-aa-text-dark">Combined order total</span> for every product order, or <span className="font-semibold text-aa-text-dark">Only marked products</span> if the offer should work only on catalog items marked as free-delivery eligible.
+                            Use <span className="font-semibold text-aa-text-dark">Combined order total</span> for one common threshold, or choose <span className="font-semibold text-aa-text-dark">Only marked products</span> for product-wise thresholds.
                           </p>
                         </div>
                       )}
@@ -1443,12 +1755,16 @@ export default function SettingsPage() {
                             business_address: data.data?.business_address || '',
                             business_hours: data.data?.business_hours || '',
                             business_map_url: data.data?.business_map_url || '',
+                            two_factor_enabled: Boolean(data.data?.two_factor_enabled),
                             free_delivery_enabled: Boolean(data.data?.free_delivery_enabled),
                             free_delivery_min_amount:
                               data.data?.free_delivery_min_amount != null
                                 ? String(data.data.free_delivery_min_amount)
                                 : '',
                             free_delivery_scope: data.data?.free_delivery_scope || 'combined',
+                            free_delivery_product_rules: normalizeFreeDeliveryProductRules(
+                              data.data?.free_delivery_product_rules
+                            ),
                           });
                           setProfilePhoto(null);
                           setProfilePhotoPreview(data.data?.profile_photo_url || null);
@@ -1485,6 +1801,16 @@ export default function SettingsPage() {
                             }
                             setProfilePhoto(null);
                           }
+                          const normalizedProductRules = normalizeFreeDeliveryProductRules(
+                            profile.free_delivery_product_rules
+                          );
+                          if (
+                            profile.free_delivery_enabled &&
+                            profile.free_delivery_scope === 'eligible_only' &&
+                            normalizedProductRules.length === 0
+                          ) {
+                            throw new Error('Add at least one product rule for free delivery.');
+                          }
                           const response = await fetch('/api/profile', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
@@ -1498,13 +1824,23 @@ export default function SettingsPage() {
                                 ? { business_type: profile.business_type }
                                 : {}),
                               business_address: profile.business_address,
-                              business_hours: profile.business_hours,
+                              business_hours:
+                                String(profile.business_hours || '').trim() ||
+                                toBusinessHoursRange(businessStartHour, businessEndHour),
                               business_map_url: profile.business_map_url,
+                              two_factor_enabled: profile.two_factor_enabled,
                               free_delivery_enabled: profile.free_delivery_enabled,
-                              free_delivery_min_amount: profile.free_delivery_enabled
-                                ? profile.free_delivery_min_amount
-                                : null,
+                              free_delivery_min_amount:
+                                profile.free_delivery_enabled &&
+                                profile.free_delivery_scope === 'combined'
+                                  ? profile.free_delivery_min_amount
+                                  : null,
                               free_delivery_scope: profile.free_delivery_scope,
+                              free_delivery_product_rules:
+                                profile.free_delivery_enabled &&
+                                profile.free_delivery_scope === 'eligible_only'
+                                  ? normalizedProductRules
+                                  : [],
                             }),
                           });
                           const contentType = response.headers.get('content-type') || '';
@@ -1526,12 +1862,16 @@ export default function SettingsPage() {
                             business_address: data.data?.business_address || '',
                             business_hours: data.data?.business_hours || '',
                             business_map_url: data.data?.business_map_url || '',
+                            two_factor_enabled: Boolean(data.data?.two_factor_enabled),
                             free_delivery_enabled: Boolean(data.data?.free_delivery_enabled),
                             free_delivery_min_amount:
                               data.data?.free_delivery_min_amount != null
                                 ? String(data.data.free_delivery_min_amount)
                                 : '',
                             free_delivery_scope: data.data?.free_delivery_scope || 'combined',
+                            free_delivery_product_rules: normalizeFreeDeliveryProductRules(
+                              data.data?.free_delivery_product_rules
+                            ),
                           });
                           await refresh();
                           setSaveStatus('Profile updated.');
@@ -2001,13 +2341,71 @@ export default function SettingsPage() {
                     <div>
                       <p className="font-semibold text-aa-text-dark">Turn on 2-step login</p>
                       <p className="mt-1 text-sm text-aa-gray">
-                        Add one more check during login.
+                        If enabled, every login requires a temporary password sent to your email.
                       </p>
+                      {!profile.email && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Add a valid email first to enable this.
+                        </p>
+                      )}
                     </div>
-                    <Button variant="outline" className="w-full sm:w-auto">
-                      Turn On
+                    <Button
+                      variant={profile.two_factor_enabled ? 'primary' : 'outline'}
+                      className="w-full sm:w-auto"
+                      disabled={twoFactorSaving || !profile.email}
+                      onClick={async () => {
+                        setTwoFactorStatus('');
+                        if (!profile.email) {
+                          setTwoFactorStatus('Add a valid email before enabling 2-step login.');
+                          return;
+                        }
+                        const nextValue = !profile.two_factor_enabled;
+                        setTwoFactorSaving(true);
+                        try {
+                          const response = await fetch('/api/profile', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({ two_factor_enabled: nextValue }),
+                          });
+                          const data = await response.json().catch(() => ({}));
+                          if (!response.ok) {
+                            throw new Error(data.error || 'Could not update 2-step login.');
+                          }
+                          const enabled = Boolean(data?.data?.two_factor_enabled);
+                          setProfile((prev) => ({ ...prev, two_factor_enabled: enabled }));
+                          await refresh();
+                          setTwoFactorStatus(
+                            enabled
+                              ? '2-step login enabled. Temporary password will be required on every login.'
+                              : '2-step login disabled.'
+                          );
+                        } catch (error) {
+                          setTwoFactorStatus(error.message || 'Could not update 2-step login.');
+                        } finally {
+                          setTwoFactorSaving(false);
+                        }
+                      }}
+                    >
+                      {twoFactorSaving
+                        ? 'Updating...'
+                        : profile.two_factor_enabled
+                        ? 'Turn Off'
+                        : 'Turn On'}
                     </Button>
                   </div>
+                  {twoFactorStatus && (
+                    <p
+                      className={`mt-3 text-sm ${
+                        twoFactorStatus.toLowerCase().includes('could not') ||
+                        twoFactorStatus.toLowerCase().includes('add a valid email')
+                          ? 'text-red-600'
+                          : 'text-green-600'
+                      }`}
+                    >
+                      {twoFactorStatus}
+                    </p>
+                  )}
                 </section>
 
               </div>

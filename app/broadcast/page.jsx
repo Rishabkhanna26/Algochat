@@ -229,7 +229,7 @@ export default function BroadcastPage() {
                   <td className="py-4 px-4">
                     <div>
                       <p className="font-semibold text-aa-text-dark">{broadcast.title}</p>
-                      <p className="text-xs text-aa-gray mt-1 truncate max-w-xs">{broadcast.message}</p>
+                      <p className="mt-1 max-w-xs break-words text-xs text-aa-gray">{broadcast.message}</p>
                     </div>
                   </td>
                   <td className="py-4 px-4">
@@ -269,8 +269,8 @@ export default function BroadcastPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="font-semibold text-aa-text-dark truncate">{broadcast.title}</p>
-                  <p className="text-xs text-aa-gray mt-1 line-clamp-2">{broadcast.message}</p>
+                  <p className="break-words font-semibold text-aa-text-dark">{broadcast.title}</p>
+                  <p className="mt-1 break-words text-xs text-aa-gray">{broadcast.message}</p>
                 </div>
                 <Badge
                   variant={
@@ -297,7 +297,7 @@ export default function BroadcastPage() {
                 </div>
                 <div className="rounded-lg bg-gray-50 px-3 py-2">
                   <p className="text-aa-gray">Created by</p>
-                  <p className="font-semibold text-aa-text-dark truncate">
+                  <p className="break-words font-semibold text-aa-text-dark">
                     {broadcast.created_by_name || 'System'}
                   </p>
                 </div>

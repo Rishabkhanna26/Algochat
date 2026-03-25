@@ -41,6 +41,7 @@ export default function AdminsPage() {
     business_category: '',
     business_type: 'both',
     booking_enabled: false,
+    token_system_enabled: false,
     access_duration_value: '',
     access_duration_unit: 'days',
     access_expires_at: null,
@@ -183,6 +184,8 @@ export default function AdminsPage() {
       business_category: admin.business_category || '',
       business_type: admin.business_type || 'both',
       booking_enabled: Boolean(admin.booking_enabled),
+      token_system_enabled:
+        admin.admin_tier === 'super_admin' || admin.token_system_enabled === true,
       access_duration_value: '',
       access_duration_unit: 'days',
       access_expires_at: admin.access_expires_at || null,
@@ -209,6 +212,8 @@ export default function AdminsPage() {
         business_category: editForm.business_category,
         business_type: editForm.business_type,
         booking_enabled: Boolean(editForm.booking_enabled),
+        token_system_enabled:
+          editForm.admin_tier === 'super_admin' || Boolean(editForm.token_system_enabled),
         access_duration_value:
           rawDuration === '' ? (nextStatus === 'active' ? 0 : undefined) : Number(parsedDuration),
         access_duration_unit: editForm.access_duration_unit,
@@ -519,6 +524,11 @@ export default function AdminsPage() {
                   {(admin.admin_tier === 'super_admin' || admin.booking_enabled) && (
                     <Badge variant="yellow">Booking access</Badge>
                   )}
+                  {admin.admin_tier !== 'super_admin' && (
+                    <Badge variant={admin.token_system_enabled ? 'orange' : 'default'}>
+                      {admin.token_system_enabled ? 'Token system on' : 'Token system off'}
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`w-2 h-2 rounded-full ${admin.status === 'active' ? 'bg-green-500' : 'bg-gray-400'}`}></span>
@@ -593,7 +603,12 @@ export default function AdminsPage() {
                     type="button"
                     onClick={() => {
                       if (disablePromoteToSuper) return;
-                      setEditForm((prev) => ({ ...prev, admin_tier: option.value }));
+                      setEditForm((prev) => ({
+                        ...prev,
+                        admin_tier: option.value,
+                        token_system_enabled:
+                          option.value === 'super_admin' ? true : prev.token_system_enabled,
+                      }));
                     }}
                     disabled={disablePromoteToSuper}
                     className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
@@ -663,6 +678,37 @@ export default function AdminsPage() {
                     : 'Not required'}
                 </div>
               </div>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-gray-200 p-3">
+            <p className="text-sm font-semibold text-aa-text-dark">Token System</p>
+            <p className="mt-1 text-xs text-aa-gray">
+              Control whether this admin can view token balances and buy tokens.
+            </p>
+            {editForm.admin_tier === 'super_admin' ? (
+              <div className="mt-3">
+                <Badge variant="orange">Super admins always have token access</Badge>
+              </div>
+            ) : (
+              <label className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <div>
+                  <p className="text-sm font-semibold text-aa-text-dark">
+                    {editForm.token_system_enabled ? 'Token system enabled' : 'Token system disabled'}
+                  </p>
+                  <p className="text-xs text-aa-gray">
+                    Disabled admins can use the app normally but token billing screens are hidden.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={Boolean(editForm.token_system_enabled)}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({ ...prev, token_system_enabled: event.target.checked }))
+                  }
+                  className="h-4 w-4 accent-aa-orange"
+                />
+              </label>
             )}
           </div>
 

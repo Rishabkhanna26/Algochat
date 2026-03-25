@@ -69,12 +69,38 @@ const LEAD_STATUS_COLORS = {
 	completed: '#34C77A',
 };
 
+const formatHourOptionLabel = (hour, { isEnd = false } = {}) => {
+	const normalizedHour = hour % 24;
+	const period = normalizedHour >= 12 ? 'PM' : 'AM';
+	const hour12 = normalizedHour % 12 || 12;
+	const label = `${hour12}:00 ${period}`;
+	if (isEnd && hour === 24) {
+		return `${label} (next day)`;
+	}
+	return label;
+};
+
+const START_HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
+	value: hour,
+	label: formatHourOptionLabel(hour),
+}));
+
+const END_HOUR_OPTIONS = Array.from({ length: 24 }, (_, index) => {
+	const hour = index + 1;
+	return {
+		value: hour,
+		label: formatHourOptionLabel(hour, { isEnd: true }),
+	};
+});
+
 export default function DashboardPage() {
 	const router = useRouter();
 	const { user } = useAuth();
 	const { pushToast } = useToast();
 	const restrictedMode = isRestrictedModeUser(user);
 	const subscriptionExpired = isSubscriptionExpired(user);
+  const canUseTokenSystem =
+    user?.admin_tier === 'super_admin' || user?.token_system_enabled === true;
 	const [stats, setStats] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [messages, setMessages] = useState([]);
@@ -117,6 +143,11 @@ export default function DashboardPage() {
 
 	useEffect(() => {
 		if (!user?.id) return;
+		if (!canUseTokenSystem) {
+			setBillingSummary(null);
+			setBillingLoading(false);
+			return;
+		}
 		let active = true;
 		const fetchBillingSummary = async () => {
 			setBillingLoading(true);
@@ -139,7 +170,7 @@ export default function DashboardPage() {
 		return () => {
 			active = false;
 		};
-	}, [user?.id]);
+	}, [canUseTokenSystem, user?.id]);
 
 	async function fetchDashboardData() {
 		try {
@@ -335,6 +366,12 @@ export default function DashboardPage() {
 		}
 	}
 
+	const scrollToAutoReplySettings = () => {
+		const section = document.getElementById('auto-reply-settings');
+		if (!section) return;
+		section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	};
+
 	if (loading) {
 		return (
 			<div className="flex items-center justify-center min-h-[50vh]">
@@ -456,10 +493,27 @@ export default function DashboardPage() {
         </div>
       )}
 
-			{/* Quick Actions */}
-			<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        {showBookings && (
-				  <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition">
+				{/* Quick Actions */}
+				<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+	        <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition">
+	          <div className="flex items-start justify-between gap-4">
+	            <div>
+	              <p className="text-xs uppercase text-gray-500 font-semibold">Automation</p>
+	              <h3 className="text-lg font-bold text-gray-900 mt-2">Auto-reply setup</h3>
+	              <p className="text-sm text-gray-600 mt-1">Edit trigger, reply style, and booking timing.</p>
+	            </div>
+	            <FontAwesomeIcon icon={faMessage} className="text-aa-orange" style={{ fontSize: 32 }} />
+	          </div>
+	          <button
+	            onClick={scrollToAutoReplySettings}
+	            className="mt-4 w-full rounded-full border border-aa-orange text-aa-orange font-semibold px-4 py-2 hover:bg-aa-orange hover:text-white transition"
+	          >
+	            Open auto-reply settings
+	          </button>
+	        </div>
+
+	        {showBookings && (
+					  <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition">
 					  <div className="flex items-start justify-between gap-4">
 						  <div>
 							  <p className="text-xs uppercase text-gray-500 font-semibold">Booking</p>
@@ -583,7 +637,8 @@ export default function DashboardPage() {
 			</div>
 
 			{/* Token Snapshot + Subscription */}
-			<div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+			<div className={`grid grid-cols-1 gap-4 ${canUseTokenSystem ? 'lg:grid-cols-2' : ''}`}>
+				{canUseTokenSystem && (
 				<div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,237,213,0.6),_transparent_55%)]" />
           <div className="relative">
@@ -633,6 +688,7 @@ export default function DashboardPage() {
             )}
           </div>
 				</div>
+        )}
 
         <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 sm:p-6 shadow-sm">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(219,234,254,0.6),_transparent_55%)]" />
@@ -780,25 +836,49 @@ export default function DashboardPage() {
 				</div>
 			</div>
 
-			{/* AI Reply Controls */}
-			<div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
-				<h2 className="text-xl font-bold text-gray-900 mb-2">WhatsApp Auto Replies</h2>
-				<p className="text-gray-600 mb-6">
-					Set what auto replies can say on WhatsApp.
-				</p>
+				{/* AI Reply Controls */}
+				<div id="auto-reply-settings" className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
+					<h2 className="text-xl font-bold text-gray-900 mb-2">WhatsApp Auto-reply Settings</h2>
+					<p className="text-gray-600 mb-6">
+						Control when auto replies start, what they can say, and booking availability.
+					</p>
         {restrictedMode && (
           <p className="text-xs text-amber-700 mb-4">
             Preview mode: settings are visible but locked until super admin approval.
           </p>
         )}
-				<p className="text-xs text-gray-500 mb-6">
-					To use smart replies, add <span className="font-semibold">OPENROUTER_API_KEY</span> in server settings.
-				</p>
-        <fieldset
-          disabled={restrictedMode}
-          className={restrictedMode ? 'opacity-60' : undefined}
-        >
-				<div className="flex items-center gap-3 mb-6">
+					<p className="text-xs text-gray-500 mb-6">
+						To use AI-written replies, add <span className="font-semibold">OPENROUTER_API_KEY</span> in server settings.
+					</p>
+	        <fieldset
+	          disabled={restrictedMode}
+	          className={restrictedMode ? 'opacity-60' : undefined}
+	        >
+					<div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+						<div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+							<p className="text-[11px] uppercase tracking-wide text-gray-500">Auto Replies</p>
+							<p className="text-sm font-semibold text-gray-900">
+								{aiSettings.automation_enabled !== false ? 'Enabled' : 'Disabled'}
+							</p>
+						</div>
+						<div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+							<p className="text-[11px] uppercase tracking-wide text-gray-500">Activation</p>
+							<p className="text-sm font-semibold text-gray-900">
+								{aiSettings.automation_trigger_mode === 'keyword'
+									? 'Keyword based'
+									: 'Any incoming message'}
+							</p>
+						</div>
+						<div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+							<p className="text-[11px] uppercase tracking-wide text-gray-500">Booking Window</p>
+							<p className="text-sm font-semibold text-gray-900">
+								{formatHourOptionLabel(aiSettings.appointment_start_hour)} to{' '}
+								{formatHourOptionLabel(aiSettings.appointment_end_hour, { isEnd: true })}
+							</p>
+						</div>
+					</div>
+
+					<div className="flex items-center gap-3 mb-6">
 					<input
 						id="automation-enabled"
 						type="checkbox"
@@ -808,40 +888,40 @@ export default function DashboardPage() {
 						}
 						className="h-4 w-4"
 					/>
-					<label htmlFor="automation-enabled" className="text-sm font-semibold text-gray-800">
-						Turn on auto replies
-					</label>
-				</div>
+						<label htmlFor="automation-enabled" className="text-sm font-semibold text-gray-800">
+							Enable auto replies
+						</label>
+					</div>
 
-				<div className="rounded-lg border border-gray-200 p-4 mb-4">
-					<h3 className="text-sm font-semibold text-gray-900 mb-1">Automation activation</h3>
-					<p className="text-xs text-gray-500 mb-4">
-						Choose whether auto replies start on any message or only after a keyword.
-					</p>
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div>
-							<GeminiSelect
-								label="Activation mode"
-								value={aiSettings.automation_trigger_mode}
+					<div className="rounded-lg border border-gray-200 p-4 mb-4">
+						<h3 className="text-sm font-semibold text-gray-900 mb-1">When should replies start?</h3>
+						<p className="text-xs text-gray-500 mb-4">
+							Choose whether replies start for every message or only after a keyword.
+						</p>
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div>
+								<GeminiSelect
+									label="Start condition"
+									value={aiSettings.automation_trigger_mode}
 								onChange={(next) =>
 									setAiSettings((prev) => ({
 										...prev,
 										automation_trigger_mode: next === 'keyword' ? 'keyword' : 'any',
 									}))
-								}
-								options={[
-									{ value: 'any', label: 'Activate on any message' },
-									{ value: 'keyword', label: 'Activate only on keyword' },
-								]}
+									}
+									options={[
+										{ value: 'any', label: 'Start on any message' },
+										{ value: 'keyword', label: 'Start only after keyword' },
+									]}
 								disabled={aiSettings.automation_enabled === false}
 								variant="warm"
 								size="sm"
 							/>
 						</div>
-						<div>
-							<label className="block text-xs font-semibold text-gray-700 mb-1">
-								Activation keyword
-							</label>
+							<div>
+								<label className="block text-xs font-semibold text-gray-700 mb-1">
+									Start keyword (only for keyword mode)
+								</label>
 							<input
 								value={aiSettings.automation_trigger_keyword}
 								onChange={(e) =>
@@ -854,12 +934,12 @@ export default function DashboardPage() {
 								placeholder="Example: START"
 								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
 							/>
-							<p className="text-xs text-gray-500 mt-2">
-								In keyword mode, the bot stays silent until the user sends the keyword once.
-							</p>
+								<p className="text-xs text-gray-500 mt-2">
+									Example: user sends <span className="font-semibold">START</span>, then auto replies begin.
+								</p>
+							</div>
 						</div>
 					</div>
-				</div>
 
 				<div className="flex items-center gap-3 mb-6">
 					<input
@@ -871,15 +951,15 @@ export default function DashboardPage() {
 						}
 						className="h-4 w-4"
 					/>
-					<label htmlFor="ai-enabled" className="text-sm font-semibold text-gray-800">
-						Use smart replies
-					</label>
-				</div>
-				<div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-					<div>
-						<label className="block text-sm font-semibold text-gray-800 mb-2">
-							What replies can talk about
+						<label htmlFor="ai-enabled" className="text-sm font-semibold text-gray-800">
+							Use AI-written replies
 						</label>
+					</div>
+					<div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+						<div>
+							<label className="block text-sm font-semibold text-gray-800 mb-2">
+								Allowed topics for AI replies
+							</label>
 						<textarea
 							value={aiSettings.ai_prompt}
 							onChange={(e) =>
@@ -889,11 +969,11 @@ export default function DashboardPage() {
 							placeholder="E.g. booking support, product details, delivery timelines. Keep tone warm and professional."
 							className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
 						/>
-					</div>
-					<div>
-						<label className="block text-sm font-semibold text-gray-800 mb-2">
-							What replies should avoid
-						</label>
+						</div>
+						<div>
+							<label className="block text-sm font-semibold text-gray-800 mb-2">
+								Topics AI must avoid
+							</label>
 						<textarea
 							value={aiSettings.ai_blocklist}
 							onChange={(e) =>
@@ -904,51 +984,57 @@ export default function DashboardPage() {
 							className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
 						/>
 					</div>
-				</div>
-				<div className="rounded-lg border border-gray-200 p-4 mb-4">
-					<h3 className="text-sm font-semibold text-gray-900 mb-1">Appointment Time Rules</h3>
-					<p className="text-xs text-gray-500 mb-4">
-						Set your working hours and slot length.
-					</p>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-						<div>
-							<label className="block text-xs font-semibold text-gray-700 mb-1">
-								Start Time (0-23)
-							</label>
-							<input
-								type="number"
-								min="0"
-								max="23"
-								value={aiSettings.appointment_start_hour}
-								onChange={(e) => {
-									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next) || next < 0) return;
-									setAiSettings((prev) => ({ ...prev, appointment_start_hour: next }));
-								}}
-								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
-							/>
-						</div>
-						<div>
-							<label className="block text-xs font-semibold text-gray-700 mb-1">
-								End Time (1-24)
-							</label>
-							<input
-								type="number"
-								min="1"
-								max="24"
-								value={aiSettings.appointment_end_hour}
-								onChange={(e) => {
-									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next) || next < 0) return;
-									setAiSettings((prev) => ({ ...prev, appointment_end_hour: next }));
-								}}
-								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
-							/>
-						</div>
-						<div>
-							<label className="block text-xs font-semibold text-gray-700 mb-1">
-								Each Slot (minutes)
-							</label>
+					</div>
+					<div className="rounded-lg border border-gray-200 p-4 mb-4">
+						<h3 className="text-sm font-semibold text-gray-900 mb-1">Business & Booking Hours</h3>
+						<p className="text-xs text-gray-500 mb-4">
+							Set opening/closing time and booking slot settings.
+						</p>
+							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+								<div>
+									<label className="block text-xs font-semibold text-gray-700 mb-1">
+										Opening Time
+									</label>
+								<select
+									value={aiSettings.appointment_start_hour}
+									onChange={(e) => {
+										const next = Number.parseInt(e.target.value, 10);
+										if (!Number.isFinite(next)) return;
+										setAiSettings((prev) => ({ ...prev, appointment_start_hour: next }));
+									}}
+									className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
+								>
+									{START_HOUR_OPTIONS.map((option) => (
+										<option key={`start-${option.value}`} value={option.value}>
+											{option.label}
+										</option>
+									))}
+								</select>
+							</div>
+								<div>
+									<label className="block text-xs font-semibold text-gray-700 mb-1">
+										Closing Time
+									</label>
+								<select
+									value={aiSettings.appointment_end_hour}
+									onChange={(e) => {
+										const next = Number.parseInt(e.target.value, 10);
+										if (!Number.isFinite(next)) return;
+										setAiSettings((prev) => ({ ...prev, appointment_end_hour: next }));
+									}}
+									className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
+								>
+									{END_HOUR_OPTIONS.map((option) => (
+										<option key={`end-${option.value}`} value={option.value}>
+											{option.label}
+										</option>
+									))}
+								</select>
+							</div>
+							<div>
+								<label className="block text-xs font-semibold text-gray-700 mb-1">
+									Slot Length (minutes)
+								</label>
 							<input
 								type="number"
 								min="15"
@@ -963,10 +1049,10 @@ export default function DashboardPage() {
 								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
 							/>
 						</div>
-						<div>
-							<label className="block text-xs font-semibold text-gray-700 mb-1">
-								Book Ahead (months)
-							</label>
+							<div>
+								<label className="block text-xs font-semibold text-gray-700 mb-1">
+									Advance Booking (months)
+								</label>
 							<input
 								type="number"
 								min="1"
@@ -981,12 +1067,12 @@ export default function DashboardPage() {
 							/>
 						</div>
 					</div>
-				</div>
-				<div className="rounded-lg border border-gray-200 p-4 mb-4">
-					<h3 className="text-sm font-semibold text-gray-900 mb-1">Old Chat Reply Rules</h3>
-					<p className="text-xs text-gray-500 mb-4">
-						Choose how old unread chats are handled after WhatsApp connects.
-					</p>
+					</div>
+					<div className="rounded-lg border border-gray-200 p-4 mb-4">
+						<h3 className="text-sm font-semibold text-gray-900 mb-1">Unread Chat Recovery</h3>
+						<p className="text-xs text-gray-500 mb-4">
+							Decide how older unread chats are handled after WhatsApp reconnects.
+						</p>
 					<div className="space-y-3 mb-4">
 						<label className="flex items-center gap-3 text-sm text-gray-800">
 							<input
@@ -998,10 +1084,10 @@ export default function DashboardPage() {
 										whatsapp_pending_recovery_enabled: e.target.checked,
 									}))
 								}
-								className="h-4 w-4"
-							/>
-							Check unread messages after WhatsApp connects
-						</label>
+									className="h-4 w-4"
+								/>
+								Check unread chats after WhatsApp reconnects
+							</label>
 						<label className="flex items-center gap-3 text-sm text-gray-800">
 							<input
 								type="checkbox"
@@ -1012,10 +1098,10 @@ export default function DashboardPage() {
 										whatsapp_only_post_config_messages: e.target.checked,
 									}))
 								}
-								className="h-4 w-4"
-							/>
-							Reply only to messages that came after setup
-						</label>
+									className="h-4 w-4"
+								/>
+								Reply only to messages received after setup
+							</label>
 						<label className="flex items-center gap-3 text-sm text-gray-800">
 							<input
 								type="checkbox"
@@ -1026,16 +1112,16 @@ export default function DashboardPage() {
 										whatsapp_recovery_ai_required: e.target.checked,
 									}))
 								}
-								className="h-4 w-4"
-							/>
-							Let AI review before sending any old-chat reply
-						</label>
-					</div>
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-						<div>
-							<label className="block text-xs font-semibold text-gray-700 mb-1">
-								Before-Setup Buffer (ms)
+									className="h-4 w-4"
+								/>
+								Let AI review before sending recovery replies
 							</label>
+						</div>
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+							<div>
+								<label className="block text-xs font-semibold text-gray-700 mb-1">
+									Ignore just-before-setup messages (ms)
+								</label>
 							<input
 								type="number"
 								min="0"
@@ -1053,10 +1139,10 @@ export default function DashboardPage() {
 								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
 							/>
 						</div>
-						<div>
-							<label className="block text-xs font-semibold text-gray-700 mb-1">
-								Look-back Time (hours)
-							</label>
+							<div>
+								<label className="block text-xs font-semibold text-gray-700 mb-1">
+									Look-back time (hours)
+								</label>
 							<input
 								type="number"
 								min="1"
@@ -1073,10 +1159,10 @@ export default function DashboardPage() {
 								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
 							/>
 						</div>
-						<div>
-							<label className="block text-xs font-semibold text-gray-700 mb-1">
-								Max Chats per Round
-							</label>
+							<div>
+								<label className="block text-xs font-semibold text-gray-700 mb-1">
+									Max chats per cycle
+								</label>
 							<input
 								type="number"
 								min="1"
@@ -1093,10 +1179,10 @@ export default function DashboardPage() {
 								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
 							/>
 						</div>
-						<div>
-							<label className="block text-xs font-semibold text-gray-700 mb-1">
-								Past Messages for AI
-							</label>
+							<div>
+								<label className="block text-xs font-semibold text-gray-700 mb-1">
+									Previous messages used by AI
+								</label>
 							<input
 								type="number"
 								min="6"
@@ -1114,10 +1200,10 @@ export default function DashboardPage() {
 							/>
 						</div>
 					</div>
-					<div className="mt-4">
-						<label className="block text-xs font-semibold text-gray-700 mb-1">
-							AI Model for Old Chats (optional)
-						</label>
+						<div className="mt-4">
+							<label className="block text-xs font-semibold text-gray-700 mb-1">
+								AI model for recovery (optional)
+							</label>
 						<input
 							type="text"
 							value={aiSettings.whatsapp_recovery_ai_model || ''}
@@ -1137,9 +1223,9 @@ export default function DashboardPage() {
 						onClick={saveAiSettings}
 						disabled={aiSaving}
 						className="px-5 py-2 rounded-full bg-aa-orange text-white font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
-					>
-						{aiSaving ? 'Saving...' : 'Save Auto-Reply Settings'}
-					</button>
+						>
+							{aiSaving ? 'Saving...' : 'Save Auto-reply Setup'}
+						</button>
 					{aiStatus && (
 						<span className={`text-sm font-semibold ${aiStatus.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>
 							{aiStatus}

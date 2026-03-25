@@ -917,25 +917,25 @@ export default function InboxPage() {
                   <div className="hidden gap-1.5 overflow-x-auto pb-1 sm:flex sm:flex-wrap sm:gap-2 sm:overflow-visible sm:pb-0">
                     <button
                       onClick={resetFilters}
-                      className="whitespace-nowrap rounded-full border border-gray-300 bg-white px-2.5 py-1 text-[10px] font-semibold text-gray-700 hover:bg-gray-50 sm:px-3 sm:py-1.5 sm:text-xs"
+                      className="rounded-full border border-gray-300 bg-white px-2.5 py-1 text-center text-[10px] font-semibold leading-snug whitespace-normal break-words text-gray-700 hover:bg-gray-50 sm:px-3 sm:py-1.5 sm:text-xs"
                     >
                       Clear all
                     </button>
                     <button
                       onClick={() => setFilters((prev) => ({ ...prev, status: 'needs_reply' }))}
-                      className="whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-semibold text-amber-700 sm:px-3 sm:py-1.5 sm:text-xs"
+                      className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-center text-[10px] font-semibold leading-snug whitespace-normal break-words text-amber-700 sm:px-3 sm:py-1.5 sm:text-xs"
                     >
                       Needs reply
                     </button>
                     <button
                       onClick={() => setFilters((prev) => ({ ...prev, status: 'unread' }))}
-                      className="whitespace-nowrap rounded-full border border-blue-300 bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-700 sm:px-3 sm:py-1.5 sm:text-xs"
+                      className="rounded-full border border-blue-300 bg-blue-50 px-2.5 py-1 text-center text-[10px] font-semibold leading-snug whitespace-normal break-words text-blue-700 sm:px-3 sm:py-1.5 sm:text-xs"
                     >
                       Unread only
                     </button>
                     <button
                       onClick={() => setFilters((prev) => ({ ...prev, type: 'incoming' }))}
-                      className="whitespace-nowrap rounded-full border border-green-300 bg-green-50 px-2.5 py-1 text-[10px] font-semibold text-green-700 sm:px-3 sm:py-1.5 sm:text-xs"
+                      className="rounded-full border border-green-300 bg-green-50 px-2.5 py-1 text-center text-[10px] font-semibold leading-snug whitespace-normal break-words text-green-700 sm:px-3 sm:py-1.5 sm:text-xs"
                     >
                       Incoming
                     </button>
@@ -1097,10 +1097,10 @@ export default function InboxPage() {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0 flex-1">
-                                  <p className="truncate text-xs font-semibold text-gray-900 sm:text-sm">
+                                  <p className="break-words text-xs font-semibold leading-snug text-gray-900 sm:text-sm">
                                     {thread.user_name || 'Unknown'}
                                   </p>
-                                  <p className="mt-0.5 truncate text-[10px] text-gray-600 sm:text-xs">
+                                  <p className="mt-0.5 break-words text-[10px] text-gray-600 sm:text-xs">
                                     {thread.phone || '—'}
                                   </p>
                                 </div>
@@ -1184,10 +1184,10 @@ export default function InboxPage() {
                           {getInitials(activeThreadMeta?.user_name, activeThreadMeta?.phone)}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-semibold text-gray-900 sm:text-base lg:text-lg">
+                          <p className="break-words text-sm font-semibold leading-snug text-gray-900 sm:text-base lg:text-lg">
                             {activeThreadMeta?.user_name || 'Unknown'}
                           </p>
-                          <p className="mt-0.5 truncate text-[10px] text-gray-600 sm:text-xs">
+                          <p className="mt-0.5 break-words text-[10px] text-gray-600 sm:text-xs">
                             {activeThreadMeta?.phone || 'No phone number'}
                           </p>
                         </div>

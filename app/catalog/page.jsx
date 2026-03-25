@@ -21,9 +21,13 @@ import {
   faMagnifyingGlass,
   faTags,
   faClock,
+  faArrowUp,
+  faArrowDown,
+  faStar,
 } from '@fortawesome/free-solid-svg-icons';
 import {
   canUseCatalogItemType,
+  getAppointmentCapabilityLabel,
   getCatalogLabel,
   hasProductAccess,
   hasServiceAccess,
@@ -131,18 +135,72 @@ const clampWhatsappLimit = (value, fallback = 3) => {
   return normalized;
 };
 
-const sortItemsForWhatsappPreview = (items = []) =>
+const sortItemsByCatalogOrder = (items = []) =>
   [...items].sort((a, b) => {
-    const whatsappOrderA = parseNumber(a?.whatsapp_sort_order, 0) ?? 0;
-    const whatsappOrderB = parseNumber(b?.whatsapp_sort_order, 0) ?? 0;
     const orderA = parseNumber(a?.sort_order, 0) ?? 0;
     const orderB = parseNumber(b?.sort_order, 0) ?? 0;
-    const effectiveA = whatsappOrderA > 0 ? whatsappOrderA : orderA;
-    const effectiveB = whatsappOrderB > 0 ? whatsappOrderB : orderB;
-    if (effectiveA !== effectiveB) return effectiveA - effectiveB;
     if (orderA !== orderB) return orderA - orderB;
     return String(a?.name || '').localeCompare(String(b?.name || ''));
   });
+
+const getWhatsappFeaturedRank = (item) => {
+  const rank = parseNumber(item?.whatsapp_sort_order, 0) ?? 0;
+  return rank > 0 ? rank : null;
+};
+
+const isWhatsappFeatured = (item) => Boolean(getWhatsappFeaturedRank(item));
+
+const sortItemsForWhatsappPreview = (items = []) =>
+  [...items].sort((a, b) => {
+    const whatsappOrderA = getWhatsappFeaturedRank(a);
+    const whatsappOrderB = getWhatsappFeaturedRank(b);
+    const orderA = parseNumber(a?.sort_order, 0) ?? 0;
+    const orderB = parseNumber(b?.sort_order, 0) ?? 0;
+    if (Boolean(whatsappOrderA) !== Boolean(whatsappOrderB)) return whatsappOrderA ? -1 : 1;
+    if (whatsappOrderA && whatsappOrderB && whatsappOrderA !== whatsappOrderB) {
+      return whatsappOrderA - whatsappOrderB;
+    }
+    if (orderA !== orderB) return orderA - orderB;
+    return String(a?.name || '').localeCompare(String(b?.name || ''));
+  });
+
+const formatWhatsappPreviewEntry = (item, type, index) => {
+  const parts = [`${index + 1}. ${item.name}`];
+  if (item.price_label) parts.push(`(${normalizePriceLabel(item.price_label)})`);
+  const durationText = formatDurationLabel(item);
+  if (type === 'service' && durationText) parts.push(durationText);
+  if (type === 'product') {
+    const quantityText = formatQuantityLabel(item);
+    if (quantityText) parts.push(`Pack: ${quantityText}`);
+  }
+  return parts.join(' ');
+};
+
+const buildWhatsappPreviewModel = ({ items, type, limit }) => {
+  const eligibleItems = items.filter(
+    (item) =>
+      item.item_type === type &&
+      item.is_active &&
+      Boolean(item.show_on_whatsapp ?? true)
+  );
+  const configuredFeaturedItems = sortItemsForWhatsappPreview(
+    eligibleItems.filter((item) => isWhatsappFeatured(item))
+  );
+  const visibleItems = sortItemsForWhatsappPreview(eligibleItems).slice(0, limit);
+  const featuredItems = visibleItems.filter((item) => isWhatsappFeatured(item));
+  const autoFillItems = visibleItems.filter((item) => !isWhatsappFeatured(item));
+
+  return {
+    limit,
+    eligibleCount: eligibleItems.length,
+    featuredCount: configuredFeaturedItems.length,
+    configuredFeaturedItems,
+    visibleItems,
+    featuredItems,
+    autoFillItems,
+    lines: visibleItems.map((item, index) => formatWhatsappPreviewEntry(item, type, index)),
+  };
+};
 
 export default function CatalogPage() {
   const { user } = useAuth();
@@ -167,10 +225,15 @@ export default function CatalogPage() {
     productLimit: '3',
   });
   const [whatsappDisplaySaving, setWhatsappDisplaySaving] = useState(false);
+  const [itemActionBusy, setItemActionBusy] = useState(false);
   const restrictedMode = isRestrictedModeUser(user);
   const canAddProducts = restrictedMode || hasProductAccess(user);
   const canAddServices = restrictedMode || hasServiceAccess(user);
   const catalogLabel = getCatalogLabel(user);
+  const serviceSectionLabel = useMemo(() => {
+    if (!canAddServices) return 'Services';
+    return user?.booking_enabled ? getAppointmentCapabilityLabel(user) : 'Services';
+  }, [canAddServices, user]);
   const isDurationEnabled =
     form.item_type === 'service' && Boolean(form.is_time_based);
 
@@ -184,8 +247,8 @@ export default function CatalogPage() {
     pushToast({ type: 'error', title: 'Not saved', message: error });
   }, [error, pushToast]);
 
-  const fetchItems = async ({ bustCache = false } = {}) => {
-    setLoading(true);
+  const fetchItems = async ({ bustCache = false, showLoader = false } = {}) => {
+    if (showLoader) setLoading(true);
     setError('');
     try {
       const cacheKey = bustCache ? `&ts=${Date.now()}` : '';
@@ -202,12 +265,12 @@ export default function CatalogPage() {
       setError(err.message);
       setItems([]);
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchItems();
+    fetchItems({ showLoader: true });
   }, []);
 
   useEffect(() => {
@@ -305,6 +368,33 @@ export default function CatalogPage() {
     });
   }, [items, filters]);
 
+  const filteredServices = useMemo(
+    () => sortItemsByCatalogOrder(filteredItems.filter((item) => item.item_type === 'service')),
+    [filteredItems]
+  );
+
+  const filteredProducts = useMemo(
+    () => sortItemsByCatalogOrder(filteredItems.filter((item) => item.item_type === 'product')),
+    [filteredItems]
+  );
+
+  const filteredSections = useMemo(() => {
+    if (filters.type === 'service') {
+      return [{ key: 'service', title: serviceSectionLabel, items: filteredServices }];
+    }
+    if (filters.type === 'product') {
+      return [{ key: 'product', title: 'Products', items: filteredProducts }];
+    }
+    const sections = [];
+    if (filteredServices.length) {
+      sections.push({ key: 'service', title: serviceSectionLabel, items: filteredServices });
+    }
+    if (filteredProducts.length) {
+      sections.push({ key: 'product', title: 'Products', items: filteredProducts });
+    }
+    return sections;
+  }, [filters.type, filteredProducts, filteredServices, serviceSectionLabel]);
+
   const stats = useMemo(() => {
     const total = items.length;
     const active = items.filter((item) => item.is_active).length;
@@ -313,13 +403,67 @@ export default function CatalogPage() {
     return { total, active, services, products };
   }, [items]);
 
+  const nextSortOrder = useMemo(() => {
+    const maxOrder = items.reduce((max, item) => {
+      const order = parseNumber(item?.sort_order, 0) ?? 0;
+      return order > max ? order : max;
+    }, 0);
+    return maxOrder + 10;
+  }, [items]);
+
+  const catalogPositionById = useMemo(() => {
+    const map = new Map();
+    ['service', 'product'].forEach((type) => {
+      const orderedItems = sortItemsByCatalogOrder(
+        items.filter((item) => item.item_type === type)
+      );
+      orderedItems.forEach((item, index) => {
+        map.set(String(item.id), { index, count: orderedItems.length });
+      });
+    });
+    return map;
+  }, [items]);
+
+  const featuredPositionById = useMemo(() => {
+    const map = new Map();
+    ['service', 'product'].forEach((type) => {
+      const featuredItems = sortItemsForWhatsappPreview(
+        items.filter((item) => item.item_type === type && isWhatsappFeatured(item))
+      );
+      featuredItems.forEach((item, index) => {
+        map.set(String(item.id), { index, count: featuredItems.length });
+      });
+    });
+    return map;
+  }, [items]);
+
+  const whatsappPreview = useMemo(
+    () => ({
+      service: buildWhatsappPreviewModel({
+        items,
+        type: 'service',
+        limit: clampWhatsappLimit(whatsappDisplay.serviceLimit, 3),
+      }),
+      product: buildWhatsappPreviewModel({
+        items,
+        type: 'product',
+        limit: clampWhatsappLimit(whatsappDisplay.productLimit, 3),
+      }),
+    }),
+    [items, whatsappDisplay]
+  );
+
   const openCreateModal = (type) => {
     if (!canUseCatalogItemType(user, type)) {
       setError(`You cannot add ${type} items for your selected business type.`);
       return;
     }
     setEditingItem(null);
-    setForm(buildEmptyForm(type));
+    setForm({
+      ...buildEmptyForm(type),
+      sort_order: nextSortOrder,
+      whatsapp_sort_order: '',
+    });
     setShowModal(true);
   };
 
@@ -355,6 +499,80 @@ export default function CatalogPage() {
     });
     setShowModal(true);
   };
+
+  const updateCatalogItemRequest = async (itemId, payload) => {
+    const response = await fetch(`/api/catalog/${itemId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data?.success === false) {
+      throw new Error(data?.error || 'Failed to update item');
+    }
+    return data?.data || null;
+  };
+
+  const runCatalogUpdates = async (updates, successMessage = '') => {
+    if (!Array.isArray(updates) || updates.length === 0) {
+      if (successMessage) setNotice(successMessage);
+      return true;
+    }
+
+    setItemActionBusy(true);
+    setNotice('');
+    setError('');
+    try {
+      for (const update of updates) {
+        await updateCatalogItemRequest(update.id, update.payload);
+      }
+      await fetchItems({ bustCache: true });
+      if (successMessage) setNotice(successMessage);
+      return true;
+    } catch (err) {
+      setError(err.message);
+      return false;
+    } finally {
+      setItemActionBusy(false);
+    }
+  };
+
+  const buildFeaturedRankUpdates = (type, nextFeaturedItems) => {
+    const nextRankById = new Map(
+      nextFeaturedItems.map((item, index) => [String(item.id), index + 1])
+    );
+
+    return items
+      .filter(
+        (item) =>
+          item.item_type === type &&
+          (nextRankById.has(String(item.id)) || isWhatsappFeatured(item))
+      )
+      .map((item) => {
+        const nextRank = nextRankById.get(String(item.id)) || 0;
+        return {
+          id: item.id,
+          payload: { whatsapp_sort_order: nextRank },
+          changed: (getWhatsappFeaturedRank(item) || 0) !== nextRank,
+        };
+      })
+      .filter((update) => update.changed)
+      .map(({ changed, ...update }) => update);
+  };
+
+  const buildCatalogOrderUpdates = (orderedItems) =>
+    orderedItems
+      .map((item, index) => {
+        const nextOrder = (index + 1) * 10;
+        return {
+          id: item.id,
+          payload: { sort_order: nextOrder },
+          changed: (parseNumber(item?.sort_order, 0) ?? 0) !== nextOrder,
+        };
+      })
+      .filter((update) => update.changed)
+      .map(({ changed, ...update }) => update);
 
   const handleSave = async (event) => {
     event.preventDefault();
@@ -409,14 +627,20 @@ export default function CatalogPage() {
       details_prompt: form.details_prompt.trim(),
       keywords: form.keywords,
       is_active: Boolean(form.is_active),
-      sort_order: parseNumber(form.sort_order, 0),
+      sort_order: parseNumber(
+        form.sort_order,
+        editingItem ? parseNumber(editingItem?.sort_order, 0) ?? 0 : nextSortOrder
+      ),
       is_bookable: form.item_type === 'service' ? Boolean(form.is_bookable) : false,
       payment_required:
         form.item_type === 'service' && form.is_bookable ? Boolean(form.payment_required) : false,
       free_delivery_eligible:
         form.item_type === 'product' ? Boolean(form.free_delivery_eligible) : false,
       show_on_whatsapp: Boolean(form.show_on_whatsapp),
-      whatsapp_sort_order: parseNumber(form.whatsapp_sort_order, 0),
+      whatsapp_sort_order:
+        form.is_active && form.show_on_whatsapp
+          ? parseNumber(form.whatsapp_sort_order, 0)
+          : 0,
       is_time_based: form.item_type === 'service' ? Boolean(form.is_time_based) : false,
     };
 
@@ -446,23 +670,94 @@ export default function CatalogPage() {
   };
 
   const handleToggleActive = async (item) => {
-    try {
-      const response = await fetch(`/api/catalog/${item.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ is_active: !item.is_active }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to update status');
-      }
-      setItems((prev) =>
-        prev.map((entry) => (entry.id === item.id ? data.data : entry))
-      );
-    } catch (err) {
-      setError(err.message);
+    const nextActive = !item.is_active;
+    await runCatalogUpdates(
+      [
+        {
+          id: item.id,
+          payload: {
+            is_active: nextActive,
+            whatsapp_sort_order: nextActive ? parseNumber(item.whatsapp_sort_order, 0) : 0,
+          },
+        },
+      ],
+      nextActive ? 'Item activated.' : 'Item hidden from the live catalog.'
+    );
+  };
+
+  const handleToggleWhatsappVisibility = async (item) => {
+    const nextVisible = !Boolean(item.show_on_whatsapp ?? true);
+    await runCatalogUpdates(
+      [
+        {
+          id: item.id,
+          payload: {
+            show_on_whatsapp: nextVisible,
+            whatsapp_sort_order: nextVisible ? parseNumber(item.whatsapp_sort_order, 0) : 0,
+          },
+        },
+      ],
+      nextVisible ? 'Item added back to WhatsApp.' : 'Item hidden from WhatsApp.'
+    );
+  };
+
+  const handleToggleFeatured = async (item) => {
+    if (!item.is_active) {
+      setError('Activate this item before adding it to the first WhatsApp message.');
+      return;
     }
+    if (item.show_on_whatsapp === false) {
+      setError('Turn on Show in WhatsApp menu before making this a top pick.');
+      return;
+    }
+
+    const typeFeaturedItems = sortItemsForWhatsappPreview(
+      items.filter((entry) => entry.item_type === item.item_type && isWhatsappFeatured(entry))
+    );
+    const nextFeaturedItems = isWhatsappFeatured(item)
+      ? typeFeaturedItems.filter((entry) => String(entry.id) !== String(item.id))
+      : [...typeFeaturedItems, item];
+
+    await runCatalogUpdates(
+      buildFeaturedRankUpdates(item.item_type, nextFeaturedItems),
+      isWhatsappFeatured(item) ? 'Top pick removed.' : 'Top pick added to the first message.'
+    );
+  };
+
+  const handleMoveFeaturedItem = async (item, direction) => {
+    const featuredItems = sortItemsForWhatsappPreview(
+      items.filter((entry) => entry.item_type === item.item_type && isWhatsappFeatured(entry))
+    );
+    const currentIndex = featuredItems.findIndex((entry) => String(entry.id) === String(item.id));
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= featuredItems.length) return;
+
+    const nextFeaturedItems = [...featuredItems];
+    const [movedItem] = nextFeaturedItems.splice(currentIndex, 1);
+    nextFeaturedItems.splice(nextIndex, 0, movedItem);
+
+    await runCatalogUpdates(
+      buildFeaturedRankUpdates(item.item_type, nextFeaturedItems),
+      'First-message order updated.'
+    );
+  };
+
+  const handleMoveCatalogItem = async (item, direction) => {
+    const orderedItems = sortItemsByCatalogOrder(
+      items.filter((entry) => entry.item_type === item.item_type)
+    );
+    const currentIndex = orderedItems.findIndex((entry) => String(entry.id) === String(item.id));
+    const nextIndex = currentIndex + direction;
+    if (currentIndex < 0 || nextIndex < 0 || nextIndex >= orderedItems.length) return;
+
+    const nextOrderedItems = [...orderedItems];
+    const [movedItem] = nextOrderedItems.splice(currentIndex, 1);
+    nextOrderedItems.splice(nextIndex, 0, movedItem);
+
+    await runCatalogUpdates(
+      buildCatalogOrderUpdates(nextOrderedItems),
+      'Catalog order updated.'
+    );
   };
 
   const handleDuplicate = async (item) => {
@@ -494,12 +789,12 @@ export default function CatalogPage() {
           details_prompt: item.details_prompt || '',
           keywords: item.keywords || '',
           is_active: false,
-          sort_order: item.sort_order ?? 0,
+          sort_order: nextSortOrder,
           is_bookable: Boolean(item.is_bookable),
           payment_required: Boolean(item.payment_required),
           free_delivery_eligible: Boolean(item.free_delivery_eligible),
           show_on_whatsapp: Boolean(item.show_on_whatsapp ?? true),
-          whatsapp_sort_order: item.whatsapp_sort_order ?? 0,
+          whatsapp_sort_order: 0,
           is_time_based: Boolean(item.is_time_based),
         }),
       });
@@ -508,7 +803,7 @@ export default function CatalogPage() {
         throw new Error(data.error || 'Failed to duplicate item');
       }
       setNotice('Item duplicated.');
-      await fetchItems();
+      await fetchItems({ bustCache: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -581,35 +876,95 @@ export default function CatalogPage() {
     }
   };
 
-  const buildPreviewLines = (type) => {
-    const limit =
-      type === 'service'
-        ? clampWhatsappLimit(whatsappDisplay.serviceLimit, 3)
-        : clampWhatsappLimit(whatsappDisplay.productLimit, 3);
-    const activeItems = sortItemsForWhatsappPreview(
-      items.filter(
-        (item) =>
-          item.item_type === type &&
-          item.is_active &&
-          Boolean(item.show_on_whatsapp ?? true)
-      )
-    ).slice(0, limit);
+  const renderWhatsappPreviewCard = ({ type, title, accentClass, badgeClass }) => {
+    const preview = whatsappPreview[type];
+    const maxRows = 5;
+    const pinnedNow = preview.featuredItems.slice(0, maxRows);
+    const visibleNow = preview.visibleItems.slice(0, maxRows);
+    const pinnedOverflow = Math.max(preview.featuredItems.length - maxRows, 0);
+    const visibleOverflow = Math.max(preview.visibleItems.length - maxRows, 0);
 
-    if (activeItems.length === 0) {
-      return ['No WhatsApp-visible items yet.'];
-    }
+    return (
+        <div className="rounded-[26px] border border-[#f1dcc5] bg-white/95 p-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${accentClass}`}>{title}</p>
+              <p className="mt-1 text-[11px] text-aa-gray">Simple view of what customers get first.</p>
+            </div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+            <span className={`rounded-full px-3 py-1 text-[11px] font-semibold whitespace-nowrap ${badgeClass}`}>
+              Live {preview.visibleItems.length}/{preview.limit}
+            </span>
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-[11px] font-semibold whitespace-nowrap text-aa-dark-blue">
+              Pinned {preview.featuredItems.length}
+            </span>
+          </div>
+        </div>
 
-    return activeItems.map((item, idx) => {
-      const parts = [`${idx + 1}. ${item.name}`];
-      if (item.price_label) parts.push(`(${normalizePriceLabel(item.price_label)})`);
-      const durationText = formatDurationLabel(item);
-      if (type === 'service' && durationText) parts.push(durationText);
-      if (type === 'product') {
-        const quantityText = formatQuantityLabel(item);
-        if (quantityText) parts.push(`Pack: ${quantityText}`);
-      }
-      return parts.join(' ');
-    });
+        <div className="mt-3 grid gap-3">
+          <div className="rounded-2xl border border-[#f5e5d4] bg-[#fffaf4] p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-aa-dark-blue">Pinned First</p>
+              <span className="text-[11px] font-semibold text-aa-gray">{preview.featuredItems.length} now</span>
+            </div>
+            {preview.featuredItems.length === 0 ? (
+              <p className="mt-2 text-sm text-aa-gray">No pinned items.</p>
+            ) : (
+              <>
+                <ul className="mt-2 divide-y divide-[#f2e4d2] text-[13px] text-aa-text-dark">
+                  {pinnedNow.map((item, index) => (
+                    <li key={`${type}-featured-${item.id}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 py-2">
+                      <span className="min-w-0">
+                        <span className="block break-words font-semibold leading-snug">{item.name}</span>
+                        {item.price_label ? (
+                          <span className="mt-0.5 block text-xs text-aa-gray">
+                            {normalizePriceLabel(item.price_label)}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="rounded-full bg-[#fff1d9] px-2 py-1 text-[11px] font-semibold text-aa-orange">
+                        Pin {index + 1}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {pinnedOverflow > 0 ? (
+                  <p className="mt-2 text-[11px] font-semibold text-aa-gray">+{pinnedOverflow} more pinned</p>
+                ) : null}
+              </>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-[#f5e5d4] bg-white p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.15em] text-aa-dark-blue">Menu Preview</p>
+              <span className="text-[11px] font-semibold text-aa-gray">{preview.autoFillItems.length} auto</span>
+            </div>
+            {preview.lines.length === 0 ? (
+              <p className="mt-2 text-sm text-aa-gray">No items to show.</p>
+            ) : (
+              <>
+                <ul className="mt-2 divide-y divide-[#f2e4d2] text-[13px] text-aa-text-dark">
+                  {visibleNow.map((item, index) => (
+                    <li key={`${type}-line-${item.id}`} className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 py-2">
+                      <span className="mt-0.5 inline-flex min-w-[38px] items-center justify-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-aa-dark-blue">
+                        {index + 1}
+                      </span>
+                      <span className="min-w-0 break-words leading-snug">
+                        {formatWhatsappPreviewEntry(item, type, index)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {visibleOverflow > 0 ? (
+                  <p className="mt-2 text-[11px] font-semibold text-aa-gray">+{visibleOverflow} more in menu</p>
+                ) : null}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -625,7 +980,9 @@ export default function CatalogPage() {
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-aa-dark-blue mb-2">{catalogLabel}</h1>
-          <p className="text-aa-gray">Manage what WhatsApp users see when they ask about offerings.</p>
+          <p className="text-aa-gray">
+            Set what customers see in WhatsApp. Pin items for the first message and keep your menu simple.
+          </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Button
@@ -678,7 +1035,7 @@ export default function CatalogPage() {
       </div>
 
       <Card className="p-4">
-        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+        <div className="flex flex-col xl:flex-row xl:items-center gap-4">
           <div className="flex-1">
             <Input
               label="Search"
@@ -688,7 +1045,7 @@ export default function CatalogPage() {
               icon={<FontAwesomeIcon icon={faMagnifyingGlass} />}
             />
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-auto xl:min-w-[34rem] xl:grid-cols-3">
             <GeminiSelect
               label="Type"
               value={filters.type}
@@ -696,6 +1053,7 @@ export default function CatalogPage() {
               options={typeOptions}
               size="sm"
               variant="vibrant"
+              className="min-w-[11rem]"
             />
             <GeminiSelect
               label="Status"
@@ -704,6 +1062,7 @@ export default function CatalogPage() {
               options={statusOptions}
               size="sm"
               variant="warm"
+              className="min-w-[11rem]"
             />
             <GeminiSelect
               label="Category"
@@ -712,13 +1071,14 @@ export default function CatalogPage() {
               options={categoryOptions}
               size="sm"
               variant="warm"
+              className="min-w-[11rem]"
             />
           </div>
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 lg:items-start">
-        <div className="space-y-4 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_24rem] 2xl:grid-cols-[minmax(0,1fr)_26rem] xl:items-start">
+        <div className="space-y-4">
           {filteredItems.length === 0 ? (
             <Card className="p-4 sm:p-6 text-center">
               <div className="w-14 h-14 bg-aa-orange/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -740,225 +1100,402 @@ export default function CatalogPage() {
               </div>
             </Card>
           ) : (
-            filteredItems.map((item) => (
-              <Card key={item.id} className="p-5" data-testid={`catalog-item-${item.id}`}>
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 bg-aa-orange/10 rounded-lg flex items-center justify-center">
-                        <FontAwesomeIcon icon={faBoxOpen} className="text-aa-orange" style={{ fontSize: 18 }} />
-                      </div>
-                      <div>
-                        <h3 className="text-lg font-bold text-aa-dark-blue">{item.name}</h3>
-                        <div className="flex flex-wrap gap-2 mt-2">
-                          <Badge variant={item.item_type === 'service' ? 'blue' : 'orange'}>
-                            {item.item_type === 'service' ? 'Service' : 'Product'}
-                          </Badge>
-                          <Badge variant={item.is_active ? 'green' : 'default'}>
-                            {item.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
-                          {item.category && <Badge variant="default">{item.category}</Badge>}
-                          {item.is_bookable && <Badge variant="yellow">Bookable</Badge>}
-                          {item.item_type === 'service' && item.is_bookable && (
-                            <Badge variant={item.payment_required ? 'orange' : 'green'}>
-                              {item.payment_required ? 'Paid before booking' : 'Free booking'}
+            filteredSections.map((section) => (
+              <section key={`catalog-section-${section.key}`} className="space-y-4">
+                {filteredSections.length > 1 && (
+                  <div className="rounded-2xl border border-[#f1dcc5] bg-white/90 px-4 py-3 shadow-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-sm font-semibold text-aa-dark-blue">{section.title}</h3>
+                      <span className="rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-aa-gray">
+                        {section.items.length} item{section.items.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  {section.items.map((item) => {
+              const catalogPosition = catalogPositionById.get(String(item.id));
+              const featuredPosition = featuredPositionById.get(String(item.id));
+              const featuredRank = getWhatsappFeaturedRank(item);
+              const actionDisabled = saving || itemActionBusy;
+              const normalizedPrice = normalizePriceLabel(item.price_label);
+              const durationLabel = formatDurationLabel(item);
+              const quantityLabel = formatQuantityLabel(item);
+              const pinActionDisabled = actionDisabled || !item.is_active || item.show_on_whatsapp === false;
+
+              return (
+                <Card
+                  key={item.id}
+                  className={`w-full min-w-0 overflow-hidden border ${
+                    featuredRank
+                      ? 'border-[#f3c061] bg-gradient-to-br from-white via-[#fff9ef] to-[#fff1d9]'
+                      : 'border-transparent'
+                  }`}
+                  data-testid={`catalog-item-${item.id}`}
+                >
+                  <div className="flex flex-col xl:flex-row">
+                    <div className="min-w-0 flex-1 p-4 sm:p-5 xl:pl-6">
+                      <div className="mb-2 flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <h3 className="break-words text-base font-semibold text-aa-dark-blue sm:text-lg">
+                              {item.name}
+                            </h3>
+                            {normalizedPrice && (
+                              <span className="break-words text-sm font-semibold text-aa-orange">
+                                {normalizedPrice}
+                              </span>
+                            )}
+                          </div>
+                          <div className="mb-2 flex flex-wrap gap-1.5">
+                            <Badge variant={item.item_type === 'service' ? 'blue' : 'orange'}>
+                              {item.item_type === 'service' ? 'Service' : 'Product'}
                             </Badge>
-                          )}
-                          {item.item_type === 'product' && item.free_delivery_eligible && (
-                            <Badge variant="blue">Free delivery eligible</Badge>
-                          )}
-                          <Badge variant={item.show_on_whatsapp === false ? 'default' : 'blue'}>
-                            {item.show_on_whatsapp === false
-                              ? 'Hidden in WhatsApp menu'
-                              : 'Shown in WhatsApp menu'}
-                          </Badge>
-                          {item.item_type === 'service' && (
-                            <Badge variant="default">
-                              {item.is_time_based ? 'Time-based' : 'No time limit'}
+                            <Badge variant={item.is_active ? 'green' : 'default'}>
+                              {item.is_active ? 'Active' : 'Inactive'}
                             </Badge>
-                          )}
+                            {item.category && <Badge variant="default">{item.category}</Badge>}
+                            {item.is_bookable && <Badge variant="yellow">Bookable</Badge>}
+                            {item.item_type === 'service' && item.is_bookable && (
+                              <Badge variant={item.payment_required ? 'orange' : 'green'}>
+                                {item.payment_required ? 'Paid before booking' : 'Free booking'}
+                              </Badge>
+                            )}
+                            {item.item_type === 'product' && item.free_delivery_eligible && (
+                              <Badge variant="blue">Free delivery eligible</Badge>
+                            )}
+                            <Badge variant={item.show_on_whatsapp === false ? 'default' : 'blue'}>
+                              {item.show_on_whatsapp === false
+                                ? 'Hidden in WhatsApp menu'
+                                : 'Shown in WhatsApp menu'}
+                            </Badge>
+                            {item.item_type === 'service' && (
+                              <Badge variant="default">
+                                {item.is_time_based ? 'Time-based' : 'No time limit'}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-aa-gray transition hover:bg-gray-100 hover:text-aa-dark-blue"
+                            title="Edit"
+                            onClick={() => openEditModal(item)}
+                          >
+                            <FontAwesomeIcon icon={faPenToSquare} style={{ fontSize: 14 }} />
+                          </button>
+                          <button
+                            type="button"
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-aa-gray transition ${
+                              actionDisabled
+                                ? 'cursor-not-allowed opacity-60'
+                                : 'hover:bg-gray-100 hover:text-aa-dark-blue'
+                            }`}
+                            title="Duplicate"
+                            onClick={() => handleDuplicate(item)}
+                            disabled={actionDisabled}
+                          >
+                            <FontAwesomeIcon icon={faCopy} style={{ fontSize: 14 }} />
+                          </button>
+                          <button
+                            type="button"
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-md text-red-600 transition ${
+                              actionDisabled
+                                ? 'cursor-not-allowed opacity-60'
+                                : 'hover:bg-red-50 hover:text-red-700'
+                            }`}
+                            title="Delete"
+                            onClick={() => handleDelete(item)}
+                            disabled={actionDisabled}
+                          >
+                            <FontAwesomeIcon icon={faTrashCan} style={{ fontSize: 14 }} />
+                          </button>
+                          <button
+                            type="button"
+                            className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition ${
+                              actionDisabled ? 'cursor-not-allowed opacity-60' : 'hover:bg-gray-100'
+                            }`}
+                            title={item.is_active ? 'Deactivate' : 'Activate'}
+                            onClick={() => handleToggleActive(item)}
+                            disabled={actionDisabled}
+                          >
+                            <FontAwesomeIcon
+                              icon={item.is_active ? faToggleOn : faToggleOff}
+                              style={{ fontSize: 16 }}
+                              className={item.is_active ? 'text-green-500' : 'text-gray-400'}
+                            />
+                          </button>
                         </div>
                       </div>
+
+                      {item.description && (
+                        <p className="mb-3 break-words text-sm text-aa-gray">{item.description}</p>
+                      )}
+
+                      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-aa-gray">
+                        {item.item_type === 'service' && durationLabel && (
+                          <span className="flex items-center gap-1.5">
+                            <FontAwesomeIcon icon={faClock} />
+                            {durationLabel}
+                          </span>
+                        )}
+                        {item.item_type === 'product' && quantityLabel && (
+                          <span className="flex items-center gap-1.5">
+                            Pack: {quantityLabel}
+                          </span>
+                        )}
+                        {item.keywords && item.keywords.length > 0 && (
+                          <span className="flex items-center gap-1.5 break-words">
+                            <FontAwesomeIcon icon={faTags} />
+                            Keywords: {item.keywords.join(', ')}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
-                    {item.description && (
-                      <p className="text-sm text-aa-gray mt-3 bg-gray-50 p-3 rounded-lg">
-                        {item.description}
+                    <div className="shrink-0 border-t border-[#f3dfc4] bg-[#fff9f2] p-4 sm:p-5 xl:w-64 xl:border-l xl:border-t-0 2xl:w-72">
+                      <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-aa-orange">
+                        Quick Actions
+                      </h4>
+                      <p className="mb-3 text-[11px] text-aa-gray">
+                        Use these buttons to control what customers see.
                       </p>
-                    )}
 
-                    <div className="flex flex-wrap gap-4 text-xs text-aa-gray mt-3">
-                      {item.price_label && (
-                        <span className="flex items-center gap-2">
-                          <FontAwesomeIcon icon={faTags} /> {normalizePriceLabel(item.price_label)}
+                      <div className="mb-4 space-y-2">
+                        <button
+                          type="button"
+                          className={`inline-flex h-8 w-full items-center justify-start gap-2 rounded-md border px-3 text-xs font-semibold transition ${
+                            actionDisabled
+                              ? 'cursor-not-allowed border-gray-200 text-gray-400'
+                              : 'border-[#f1dcc5] bg-white text-aa-dark-blue hover:border-aa-orange hover:text-aa-orange'
+                          }`}
+                          onClick={() => handleToggleWhatsappVisibility(item)}
+                          disabled={actionDisabled}
+                        >
+                          <FontAwesomeIcon
+                            icon={item.show_on_whatsapp === false ? faToggleOn : faToggleOff}
+                            style={{ fontSize: 13 }}
+                          />
+                          <span className="break-words text-left">
+                            {item.show_on_whatsapp === false ? 'Show in WhatsApp' : 'Hide from WhatsApp'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`inline-flex h-8 w-full items-center justify-start gap-2 rounded-md border px-3 text-xs font-semibold transition ${
+                            pinActionDisabled
+                              ? 'cursor-not-allowed border-gray-200 text-gray-400'
+                              : 'border-[#f1dcc5] bg-white text-aa-dark-blue hover:border-aa-orange hover:text-aa-orange'
+                          }`}
+                          onClick={() => handleToggleFeatured(item)}
+                          disabled={pinActionDisabled}
+                        >
+                          <FontAwesomeIcon icon={faStar} style={{ fontSize: 12 }} />
+                          <span className="break-words text-left">
+                            {featuredRank ? 'Unpin from First Message' : 'Pin to First Message'}
+                          </span>
+                        </button>
+                      </div>
+
+                      <h4 className="mb-1 text-xs font-semibold text-aa-dark-blue">Change order</h4>
+                      <p className="mb-2 text-[11px] text-aa-gray">Move this item up or down.</p>
+                      <div className="mb-3 grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          className={`inline-flex h-7 items-center justify-center gap-1 rounded-md border px-3 text-[11px] font-semibold transition ${
+                            actionDisabled || !featuredPosition || featuredPosition.index === 0
+                              ? 'cursor-not-allowed border-gray-200 text-gray-400'
+                              : 'border-[#f1dcc5] bg-white text-aa-dark-blue hover:border-aa-orange hover:text-aa-orange'
+                          }`}
+                          onClick={() => handleMoveFeaturedItem(item, -1)}
+                          disabled={actionDisabled || !featuredPosition || featuredPosition.index === 0}
+                        >
+                          <FontAwesomeIcon icon={faArrowUp} style={{ fontSize: 11 }} />
+                          <span className="break-words">Pin Up</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`inline-flex h-7 items-center justify-center gap-1 rounded-md border px-3 text-[11px] font-semibold transition ${
+                            actionDisabled ||
+                            !featuredPosition ||
+                            featuredPosition.index === featuredPosition.count - 1
+                              ? 'cursor-not-allowed border-gray-200 text-gray-400'
+                              : 'border-[#f1dcc5] bg-white text-aa-dark-blue hover:border-aa-orange hover:text-aa-orange'
+                          }`}
+                          onClick={() => handleMoveFeaturedItem(item, 1)}
+                          disabled={
+                            actionDisabled ||
+                            !featuredPosition ||
+                            featuredPosition.index === featuredPosition.count - 1
+                          }
+                        >
+                          <FontAwesomeIcon icon={faArrowDown} style={{ fontSize: 11 }} />
+                          <span className="break-words">Pin Down</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`inline-flex h-7 items-center justify-center gap-1 rounded-md border px-3 text-[11px] font-semibold transition ${
+                            actionDisabled || !catalogPosition || catalogPosition.index === 0
+                              ? 'cursor-not-allowed border-gray-200 text-gray-400'
+                              : 'border-[#f1dcc5] bg-white text-aa-dark-blue hover:border-aa-orange hover:text-aa-orange'
+                          }`}
+                          onClick={() => handleMoveCatalogItem(item, -1)}
+                          disabled={actionDisabled || !catalogPosition || catalogPosition.index === 0}
+                        >
+                          <FontAwesomeIcon icon={faArrowUp} style={{ fontSize: 11 }} />
+                          <span className="break-words">Menu Up</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`inline-flex h-7 items-center justify-center gap-1 rounded-md border px-3 text-[11px] font-semibold transition ${
+                            actionDisabled ||
+                            !catalogPosition ||
+                            catalogPosition.index === catalogPosition.count - 1
+                              ? 'cursor-not-allowed border-gray-200 text-gray-400'
+                              : 'border-[#f1dcc5] bg-white text-aa-dark-blue hover:border-aa-orange hover:text-aa-orange'
+                          }`}
+                          onClick={() => handleMoveCatalogItem(item, 1)}
+                          disabled={
+                            actionDisabled ||
+                            !catalogPosition ||
+                            catalogPosition.index === catalogPosition.count - 1
+                          }
+                        >
+                          <FontAwesomeIcon icon={faArrowDown} style={{ fontSize: 11 }} />
+                          <span className="break-words">Menu Down</span>
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-aa-gray">
+                        <span>Menu spot {catalogPosition ? `#${catalogPosition.index + 1}` : 'not set'}</span>
+                        <span>
+                          First message{' '}
+                          {featuredRank
+                            ? `pinned${featuredPosition ? ` #${featuredPosition.index + 1}` : ''}`
+                            : 'auto add'}
                         </span>
-                      )}
-                      {item.item_type === 'service' && formatDurationLabel(item) && (
-                        <span className="flex items-center gap-2">
-                          <FontAwesomeIcon icon={faClock} /> {formatDurationLabel(item)}
-                        </span>
-                      )}
-                      {item.item_type === 'product' && formatQuantityLabel(item) && (
-                        <span className="flex items-center gap-2">
-                          Qty/Pack: {formatQuantityLabel(item)}
-                        </span>
-                      )}
-                      {item.keywords && item.keywords.length > 0 && (
-                        <span className="flex items-center gap-2">
-                          Keywords: {item.keywords.join(', ')}
-                        </span>
-                      )}
+                      </div>
+
+                      {featuredRank ? (
+                        <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-aa-orange">
+                          <FontAwesomeIcon icon={faStar} style={{ fontSize: 11 }} />
+                          Pinned for First Message
+                        </div>
+                      ) : null}
                     </div>
                   </div>
-
-                  <div className="flex flex-col items-start md:items-end gap-2">
-                    <span className="text-xs text-aa-gray">Catalog order: {item.sort_order ?? 0}</span>
-                    <span className="text-xs text-aa-gray">
-                      WhatsApp order:{' '}
-                      {Number(item.whatsapp_sort_order ?? 0) > 0
-                        ? item.whatsapp_sort_order
-                        : 'Same as catalog'}
-                    </span>
-                    <div className="flex items-center gap-3 text-sm font-semibold">
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 text-aa-dark-blue hover:underline"
-                        onClick={() => openEditModal(item)}
-                      >
-                        <FontAwesomeIcon icon={faPenToSquare} style={{ fontSize: 14 }} />
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 text-aa-orange hover:underline"
-                        onClick={() => handleDuplicate(item)}
-                        disabled={saving}
-                      >
-                        <FontAwesomeIcon icon={faCopy} style={{ fontSize: 14 }} />
-                        Duplicate
-                      </button>
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 text-red-600 hover:underline"
-                        onClick={() => handleDelete(item)}
-                        disabled={saving}
-                      >
-                        <FontAwesomeIcon icon={faTrashCan} style={{ fontSize: 14 }} />
-                        Delete
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 text-sm font-semibold text-aa-dark-blue mt-2"
-                      onClick={() => handleToggleActive(item)}
-                    >
-                      <FontAwesomeIcon
-                        icon={item.is_active ? faToggleOn : faToggleOff}
-                        style={{ fontSize: 22 }}
-                        className={item.is_active ? 'text-green-500' : 'text-gray-400'}
-                      />
-                      {item.is_active ? 'Active' : 'Inactive'}
-                    </button>
-                  </div>
+                </Card>
+              );
+                  })}
                 </div>
-              </Card>
+              </section>
             ))
           )}
         </div>
 
-        <div className="space-y-4 lg:sticky lg:top-24 lg:self-start lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1">
-          <Card className="border border-[#f1dcc5] bg-gradient-to-br from-white via-[#fff9f2] to-[#fdebd7] p-5 shadow-md">
-            <h3 className="text-lg font-bold text-aa-dark-blue mb-2">WhatsApp Preview</h3>
-            <p className="text-sm text-aa-dark-blue/80 mb-4">
-              Pick how many items show in your WhatsApp menu. Only items set to
-              <span className="font-semibold text-aa-text-dark"> Shown in WhatsApp menu </span>
-              are included.
-            </p>
-            <div className="mb-4 rounded-[24px] border-2 border-[#FDA913] bg-gradient-to-br from-[#fffaf4] via-[#fff2e3] to-[#ffe4bf] p-4 shadow-lg shadow-[#FDA913]/10">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-aa-orange">
-                    Display Controls
-                  </p>
-                  <p className="mt-1 text-sm font-semibold text-aa-dark-blue">
-                    Control how much of your catalog shows in WhatsApp
-                  </p>
+        <div className="space-y-4 xl:sticky xl:top-24 xl:self-start">
+          <Card className="overflow-hidden border border-[#f1dcc5] bg-gradient-to-br from-white via-[#fff9f2] to-[#fdebd7] shadow-md">
+            <div className="border-b border-[#f1dcc5] bg-[#10243e] px-5 py-5 text-white">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#f5c96d]">
+                      WhatsApp Preview
+                    </p>
+                    <h3 className="mt-2 text-xl font-bold">What customers will see</h3>
+                  </div>
+                  <span className="self-start rounded-full bg-white/10 px-3 py-1 text-xs font-semibold whitespace-nowrap text-white/90">
+                    Always visible
+                  </span>
                 </div>
-                <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-aa-dark-blue shadow-sm">
-                  Live Menu
-                </span>
+                <p className="mt-3 text-sm text-white/80">
+                  Set item counts first. Pinned items are always shown before others.
+                </p>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {canAddServices && (
-                  <Input
-                    className="[&_label]:text-aa-dark-blue [&_label]:font-semibold [&_input]:border-[#f2b174] [&_input]:bg-white/95 [&_input]:shadow-sm [&_input]:focus:border-aa-orange"
-                    label="Services to show"
-                    type="number"
-                    min="0"
-                    max="25"
-                    value={whatsappDisplay.serviceLimit}
-                    onChange={(event) =>
-                      setWhatsappDisplay((prev) => ({
-                        ...prev,
-                        serviceLimit: event.target.value,
-                      }))
-                    }
-                    placeholder="3"
-                  />
-                )}
-                {canAddProducts && (
-                  <Input
-                    className="[&_label]:text-aa-dark-blue [&_label]:font-semibold [&_input]:border-[#f2b174] [&_input]:bg-white/95 [&_input]:shadow-sm [&_input]:focus:border-aa-orange"
-                    label="Products to show"
-                    type="number"
-                    min="0"
-                    max="25"
-                    value={whatsappDisplay.productLimit}
-                    onChange={(event) =>
-                      setWhatsappDisplay((prev) => ({
-                        ...prev,
-                        productLimit: event.target.value,
-                      }))
-                    }
-                    placeholder="3"
-                  />
-                )}
+
+              <div className="space-y-4 p-5">
+                <div className="rounded-[26px] border-2 border-[#FDA913] bg-gradient-to-br from-[#fffaf4] via-[#fff2e3] to-[#ffe4bf] p-4 shadow-lg shadow-[#FDA913]/10">
+                  <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-aa-orange">
+                      Menu Settings
+                      </p>
+                      <p className="mt-1 text-sm font-semibold text-aa-dark-blue">
+                      Choose how many items appear in WhatsApp.
+                      </p>
+                    </div>
+                    <span className="self-start rounded-full bg-white/90 px-3 py-1 text-xs font-semibold whitespace-nowrap text-aa-dark-blue shadow-sm">
+                      Live setup
+                    </span>
+                  </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {canAddServices && (
+                    <Input
+                      className="[&_label]:text-aa-dark-blue [&_label]:font-semibold [&_input]:border-[#f2b174] [&_input]:bg-white/95 [&_input]:shadow-sm [&_input]:focus:border-aa-orange"
+                      label={`${serviceSectionLabel} shown`}
+                      type="number"
+                      min="0"
+                      max="25"
+                      value={whatsappDisplay.serviceLimit}
+                      onChange={(event) =>
+                        setWhatsappDisplay((prev) => ({
+                          ...prev,
+                          serviceLimit: event.target.value,
+                        }))
+                      }
+                      placeholder="3"
+                    />
+                  )}
+                  {canAddProducts && (
+                    <Input
+                      className="[&_label]:text-aa-dark-blue [&_label]:font-semibold [&_input]:border-[#f2b174] [&_input]:bg-white/95 [&_input]:shadow-sm [&_input]:focus:border-aa-orange"
+                      label="Products shown"
+                      type="number"
+                      min="0"
+                      max="25"
+                      value={whatsappDisplay.productLimit}
+                      onChange={(event) =>
+                        setWhatsappDisplay((prev) => ({
+                          ...prev,
+                          productLimit: event.target.value,
+                        }))
+                      }
+                      placeholder="3"
+                    />
+                  )}
+                </div>
+                <p className="mt-3 rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-xs text-aa-dark-blue/80">
+                  Use <span className="font-semibold text-aa-text-dark">0</span> to hide a section.
+                </p>
+                <Button
+                  type="button"
+                  variant="primary"
+                  className="mt-4 w-full"
+                  onClick={saveWhatsappDisplaySettings}
+                  disabled={whatsappDisplaySaving}
+                >
+                  {whatsappDisplaySaving ? 'Saving...' : 'Save Menu Settings'}
+                </Button>
               </div>
-              <p className="mt-3 rounded-2xl border border-white/70 bg-white/80 px-3 py-2 text-xs text-aa-dark-blue/80">
-                Use <span className="font-semibold text-aa-text-dark">0</span> to hide that section in WhatsApp
-                (customers will not see it).
-              </p>
-              <Button
-                type="button"
-                variant="primary"
-                className="mt-4 w-full"
-                onClick={saveWhatsappDisplaySettings}
-                disabled={whatsappDisplaySaving}
-              >
-                {whatsappDisplaySaving ? 'Saving...' : 'Save WhatsApp Display'}
-              </Button>
-            </div>
-            <div className="space-y-3">
-              {canAddServices && (
-                <div className="rounded-2xl border border-[#f1dcc5] bg-white/90 p-4 shadow-sm">
-                  <p className="text-xs font-semibold text-aa-orange uppercase tracking-[0.18em] mb-2">Services</p>
-                  <ul className="text-sm text-aa-text-dark space-y-1">
-                    {buildPreviewLines('service').map((line, idx) => (
-                      <li key={`service-preview-${idx}`}>{line}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {canAddProducts && (
-                <div className="rounded-2xl border border-[#f1dcc5] bg-white/90 p-4 shadow-sm">
-                  <p className="text-xs font-semibold text-aa-orange uppercase tracking-[0.18em] mb-2">Products</p>
-                  <ul className="text-sm text-aa-text-dark space-y-1">
-                    {buildPreviewLines('product').map((line, idx) => (
-                      <li key={`product-preview-${idx}`}>{line}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+
+              <div className="space-y-3">
+                {canAddServices &&
+                  renderWhatsappPreviewCard({
+                    type: 'service',
+                    title: serviceSectionLabel,
+                    accentClass: 'text-aa-orange',
+                    badgeClass: 'bg-[#fff1d9] text-aa-orange',
+                  })}
+                {canAddProducts &&
+                  renderWhatsappPreviewCard({
+                    type: 'product',
+                    title: 'Products',
+                    accentClass: 'text-[#0f4c81]',
+                    badgeClass: 'bg-[#e8f3ff] text-[#0f4c81]',
+                  })}
+              </div>
             </div>
           </Card>
         </div>
@@ -1159,7 +1696,9 @@ export default function CatalogPage() {
             <div className="lg:col-span-4 space-y-4">
               <div className="rounded-2xl border border-gray-200 p-4">
                 <p className="text-sm font-semibold text-aa-text-dark">Publishing</p>
-                <p className="text-xs text-aa-gray mt-1">Control what is visible, and in what order.</p>
+                <p className="text-xs text-aa-gray mt-1">
+                  Turn visibility on or off here. Use the main list to pin top items and change order.
+                </p>
 
                 <div className="mt-4 flex items-center justify-between">
                   <div>
@@ -1308,37 +1847,6 @@ export default function CatalogPage() {
                     />
                   </div>
                 )}
-
-                <div className="mt-4">
-                  <Input
-                    label="Catalog Order (1 = first)"
-                    type="number"
-                    value={form.sort_order}
-                    onChange={(event) => setForm((prev) => ({ ...prev, sort_order: event.target.value }))}
-                    placeholder="e.g., 1"
-                  />
-                  <p className="mt-2 text-xs text-aa-gray">
-                    Smaller number shows earlier in your main catalog list.
-                  </p>
-                </div>
-
-                <div className="mt-4">
-                  <Input
-                    label="WhatsApp Menu Order (optional)"
-                    type="number"
-                    value={form.whatsapp_sort_order}
-                    onChange={(event) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        whatsapp_sort_order: event.target.value,
-                      }))
-                    }
-                    placeholder="Leave empty to match catalog"
-                  />
-                  <p className="mt-2 text-xs text-aa-gray">
-                    Only for WhatsApp. Smaller number shows earlier. Leave blank to keep the same order as your catalog.
-                  </p>
-                </div>
               </div>
 
               <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
@@ -1346,7 +1854,7 @@ export default function CatalogPage() {
                 <p className="text-xs text-aa-gray">A quick look at what customers see in WhatsApp.</p>
                 <div className="mt-4 space-y-2 text-sm">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="font-semibold text-aa-text-dark truncate">
+                    <span className="break-words font-semibold text-aa-text-dark">
                       {form.name || 'Item name'}
                     </span>
                     <span className="text-aa-gray">{normalizePriceLabel(form.price_label) || 'Price label'}</span>
@@ -1377,10 +1885,7 @@ export default function CatalogPage() {
                     WhatsApp menu: {form.show_on_whatsapp ? 'Shown' : 'Hidden'}
                   </p>
                   <p className="text-xs text-aa-gray">
-                    WhatsApp menu order:{' '}
-                    {parseNumber(form.whatsapp_sort_order, 0) > 0
-                      ? parseNumber(form.whatsapp_sort_order, 0)
-                      : 'Same as catalog'}
+                    Pinned for first message: {parseNumber(form.whatsapp_sort_order, 0) > 0 ? 'Yes' : 'Set from main list'}
                   </p>
                   {form.item_type === 'service' && form.is_bookable && (
                     <p className="text-xs text-aa-gray">

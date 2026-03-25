@@ -35,7 +35,7 @@ export default function Input({
   return (
     <div className={`w-full ${className}`}>
       {label && (
-        <label className="block text-sm font-semibold text-aa-text-dark mb-2">
+        <label className="mb-2 block break-words text-sm font-semibold leading-snug text-aa-text-dark">
           {label} {required && <span className="text-red-500">*</span>}
         </label>
       )}
@@ -63,7 +63,7 @@ export default function Input({
           </span>
         )}
       </div>
-      {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
+      {error && <p className="mt-1 break-words text-xs text-red-500">{error}</p>}
     </div>
   );
 }

@@ -10,7 +10,7 @@ export default function Badge({ children, variant = 'default', className = '' })
 
   return (
     <span 
-      className={`inline-block px-3 py-1 text-xs font-semibold rounded-full ${variants[variant]} ${className}`}
+      className={`inline-flex max-w-full items-center rounded-full px-3 py-1 text-center text-xs font-semibold leading-snug whitespace-normal break-words ${variants[variant]} ${className}`}
       data-testid="badge"
     >
       {children}

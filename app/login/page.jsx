@@ -27,6 +27,11 @@ export default function LoginPage() {
   const [pricingError, setPricingError] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [twoFactorRequired, setTwoFactorRequired] = useState(false);
+  const [twoFactorToken, setTwoFactorToken] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorHint, setTwoFactorHint] = useState('');
+  const [twoFactorLoading, setTwoFactorLoading] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [forgotIdentifier, setForgotIdentifier] = useState('');
@@ -129,10 +134,19 @@ export default function LoginPage() {
         credentials: 'include',
         body: JSON.stringify({ email, password }),
       });
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
         setError(data.error || 'Login failed');
+        return;
+      }
+
+      if (data?.requires_two_factor) {
+        setTwoFactorRequired(true);
+        setTwoFactorToken(String(data.two_factor_token || ''));
+        setTwoFactorHint(String(data.two_factor_hint || ''));
+        setTwoFactorCode('');
+        setError('');
         return;
       }
 
@@ -143,6 +157,38 @@ export default function LoginPage() {
       console.error('Login error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyTwoFactor = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (!twoFactorCode.trim()) {
+      setError('Enter the temporary password sent to your email.');
+      return;
+    }
+    setTwoFactorLoading(true);
+    try {
+      const response = await fetch('/api/auth/login/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          two_factor_token: twoFactorToken,
+          code: twoFactorCode,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setError(data.error || '2-step verification failed');
+        return;
+      }
+      await refresh();
+      router.push('/dashboard');
+    } catch (err) {
+      setError(err.message || '2-step verification failed. Please try again.');
+    } finally {
+      setTwoFactorLoading(false);
     }
   };
 
@@ -320,7 +366,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="relative z-10 w-full max-w-md">
+          <div className="relative z-10 w-full max-w-xl">
             <div className="mb-7 flex justify-center lg:hidden aa-auth-reveal-up" style={{ animationDelay: '140ms' }}>
               <div className="rounded-2xl border border-white/70 bg-white/90 p-2.5 shadow-[0_14px_34px_rgba(15,23,42,0.2)]">
                 <Image
@@ -334,9 +380,21 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="aa-auth-card rounded-3xl border border-white/80 bg-white/90 p-7 shadow-[0_30px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-8 aa-auth-card-reveal">
-              <h1 className="mb-2 text-3xl font-black text-slate-900 aa-auth-reveal-up" style={{ animationDelay: '120ms' }}>Sign in</h1>
-              <p className="mb-6 text-sm text-slate-500 aa-auth-reveal-up" style={{ animationDelay: '180ms' }}>Log in to continue managing your workspace.</p>
+            <div className="aa-auth-card rounded-3xl border border-white/80 bg-white/90 p-10 shadow-[0_30px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-12 aa-auth-card-reveal">
+              <div
+                className="mb-8 rounded-2xl border border-[#ffd8b0] bg-gradient-to-r from-[#fff7ee] via-[#fffaf5] to-white p-4 aa-auth-reveal-up sm:p-5"
+                style={{ animationDelay: '120ms' }}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-aa-orange">
+                  Welcome Back
+                </p>
+                <h1 className="mt-2 text-3xl font-black leading-tight text-slate-900 sm:text-4xl">
+                  Sign in
+                </h1>
+                <p className="mt-2 text-sm text-slate-600 sm:text-base">
+                  Log in to continue managing your workspace.
+                </p>
+              </div>
 
               {oauthNotice && !error && (
                 <div
@@ -356,49 +414,86 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="aa-auth-reveal-up" style={{ animationDelay: '240ms' }}>
+              {!twoFactorRequired ? (
+                <form onSubmit={handleLogin} className="space-y-5">
+                  <div className="aa-auth-reveal-up" style={{ animationDelay: '240ms' }}>
+                    <AuthField
+                      label="Email or User ID"
+                      type="text"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="User ID, email, or phone"
+                      icon={<FontAwesomeIcon icon={faEnvelope} style={{ fontSize: 14 }} />}
+                    />
+                  </div>
+
+                  <div className="aa-auth-reveal-up" style={{ animationDelay: '300ms' }}>
+                    <AuthField
+                      label="Password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      icon={<FontAwesomeIcon icon={faLock} style={{ fontSize: 14 }} />}
+                      rightElement={
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          className="text-slate-500 transition hover:text-slate-700"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
+                        </button>
+                      }
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="mt-1 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-base font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
+                    style={{ animationDelay: '360ms' }}
+                  >
+                    <FontAwesomeIcon icon={faRightToBracket} />
+                    {loading ? 'Logging in...' : 'Login'}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleVerifyTwoFactor} className="space-y-4">
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+                    Temporary password sent to {twoFactorHint || 'your email'}. Enter it to complete login.
+                  </div>
                   <AuthField
-                    label="Email or User ID"
+                    label="Temporary Password"
                     type="text"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="User ID, email, or phone"
-                    icon={<FontAwesomeIcon icon={faEnvelope} style={{ fontSize: 14 }} />}
-                  />
-                </div>
-
-                <div className="aa-auth-reveal-up" style={{ animationDelay: '300ms' }}>
-                  <AuthField
-                    label="Password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    value={twoFactorCode}
+                    onChange={(e) => setTwoFactorCode(e.target.value)}
+                    placeholder="Enter temporary password"
                     icon={<FontAwesomeIcon icon={faLock} style={{ fontSize: 14 }} />}
-                    rightElement={
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((prev) => !prev)}
-                        className="text-slate-500 transition hover:text-slate-700"
-                        aria-label={showPassword ? 'Hide password' : 'Show password'}
-                      >
-                        <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
-                      </button>
-                    }
                   />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-sm font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
-                  style={{ animationDelay: '360ms' }}
-                >
-                  <FontAwesomeIcon icon={faRightToBracket} />
-                  {loading ? 'Logging in...' : 'Login'}
-                </button>
-              </form>
+                  <button
+                    type="submit"
+                    disabled={twoFactorLoading}
+                    className="mt-1 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-base font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60"
+                  >
+                    <FontAwesomeIcon icon={faRightToBracket} />
+                    {twoFactorLoading ? 'Verifying...' : 'Verify & Login'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTwoFactorRequired(false);
+                      setTwoFactorToken('');
+                      setTwoFactorCode('');
+                      setTwoFactorHint('');
+                      setError('');
+                    }}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base font-medium text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Back to password login
+                  </button>
+                </form>
+              )}
 
               <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:hidden">
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
@@ -430,18 +525,21 @@ export default function LoginPage() {
                 )}
               </div>
 
+              {!twoFactorRequired && (
               <div className="my-5 flex items-center gap-3 aa-auth-reveal-up" style={{ animationDelay: '420ms' }}>
                 <div className="h-px flex-1 bg-slate-200" />
                 <span className="text-xs text-slate-500">or</span>
                 <div className="h-px flex-1 bg-slate-200" />
               </div>
+              )}
 
+              {!twoFactorRequired && (
               <button
                 type="button"
                 onClick={() => {
                   window.location.href = '/api/auth/google/start';
                 }}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50 aa-auth-reveal-up"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-base font-medium text-slate-700 transition hover:bg-slate-50 aa-auth-reveal-up"
                 style={{ animationDelay: '470ms' }}
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -452,7 +550,9 @@ export default function LoginPage() {
                 </svg>
                 Continue with Google
               </button>
+              )}
 
+              {!twoFactorRequired && (
               <div className="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm aa-auth-reveal-up" style={{ animationDelay: '520ms' }}>
                 <button
                   type="button"
@@ -473,6 +573,7 @@ export default function LoginPage() {
                   Create an account
                 </button>
               </div>
+              )}
             </div>
           </div>
         </section>
@@ -569,7 +670,7 @@ export default function LoginPage() {
 function AuthField({ label, icon, rightElement, ...props }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-semibold text-slate-700">{label}</label>
+      <label className="mb-2 block text-base font-semibold text-slate-700">{label}</label>
       <div className="relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
           {icon}
@@ -577,7 +678,7 @@ function AuthField({ label, icon, rightElement, ...props }) {
         <input
           {...props}
           required
-          className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-11 text-sm text-slate-900 outline-none transition focus:border-aa-orange focus:ring-2 focus:ring-orange-100"
+          className="h-14 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-12 text-base text-slate-900 outline-none transition focus:border-aa-orange focus:ring-2 focus:ring-orange-100"
         />
         {rightElement && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2">
