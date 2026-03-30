@@ -102,29 +102,18 @@ export default function Navbar({ onMenuClick }) {
 
     const fetchStatus = async () => {
       try {
-        const token = await getBackendJwt();
         if (!isMounted) return;
-        const response = await fetch(
-          `${WHATSAPP_API_BASE}/whatsapp/status?adminId=${user.id}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-            credentials: 'include',
-          }
-        );
+        const response = await fetch(`/api/whatsapp/status?adminId=${user.id}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        });
         if (response.status === 401) {
-          const freshToken = await getBackendJwt({ forceRefresh: true });
+          await getBackendJwt({ forceRefresh: true });
           if (!isMounted) return;
-          const retryResponse = await fetch(
-            `${WHATSAPP_API_BASE}/whatsapp/status?adminId=${user.id}`,
-            {
-              headers: {
-                Authorization: `Bearer ${freshToken}`,
-              },
-              credentials: 'include',
-            }
-          );
+          const retryResponse = await fetch(`/api/whatsapp/status?adminId=${user.id}`, {
+            credentials: 'include',
+            cache: 'no-store',
+          });
           if (!retryResponse.ok) throw new Error('status');
           const retryPayload = await retryResponse.json();
           if (!isMounted) return;

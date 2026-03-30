@@ -34,9 +34,40 @@ import { getBusinessTypeLabel, hasProductAccess } from '../../lib/business.js';
 import { isRestrictedModeUser } from '../../lib/access.js';
 
 const WHATSAPP_API_BASE =
-  process.env.NEXT_PUBLIC_WHATSAPP_API_BASE || 'http://localhost:3001';
+  process.env.NEXT_PUBLIC_WHATSAPP_API_BASE || 'http://localhost:4000';
 const WHATSAPP_SOCKET_URL =
   process.env.NEXT_PUBLIC_WHATSAPP_SOCKET_URL || WHATSAPP_API_BASE;
+const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+
+const buildWhatsAppOriginCandidates = (baseUrl) => {
+  const candidates = [];
+  const seen = new Set();
+  const addCandidate = (value) => {
+    const normalized = String(value || '').trim();
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    candidates.push(normalized);
+  };
+
+  if (typeof window !== 'undefined') {
+    try {
+      const parsed = new URL(baseUrl, window.location.origin);
+      if (
+        LOCALHOST_HOSTS.has(parsed.hostname) &&
+        !LOCALHOST_HOSTS.has(window.location.hostname)
+      ) {
+        parsed.hostname = window.location.hostname;
+        addCandidate(parsed.origin);
+      }
+    } catch (_error) {
+      // Ignore malformed env values and keep the original candidate only.
+    }
+  }
+
+  addCandidate(baseUrl);
+
+  return candidates;
+};
 
 const BUSINESS_TYPE_OPTIONS = [
   { value: 'product', label: 'Product-based' },
@@ -174,6 +205,7 @@ export default function SettingsPage() {
   const [whatsappPairingPhoneInput, setWhatsappPairingPhoneInput] = useState('');
   const [whatsappQrVersion, setWhatsappQrVersion] = useState(0);
   const whatsappQrJobRef = useRef(0);
+  const whatsappSocketClosingRef = useRef(false);
   const settingsMountedRef = useRef(true);
   const [whatsappActionStatus, setWhatsappActionStatus] = useState('');
   const [profileLoading, setProfileLoading] = useState(true);
@@ -310,6 +342,7 @@ export default function SettingsPage() {
       title: 'Action failed',
       message: whatsappActionStatus,
     });
+    setWhatsappActionStatus('');
   }, [whatsappActionStatus, pushToast]);
 
   useEffect(() => {
@@ -350,15 +383,13 @@ export default function SettingsPage() {
       nextStatus === 'connected' && !isCurrentAdmin
         ? 'connected_other'
         : nextStatus;
-    const isConnected = derivedStatus === 'connected' && Boolean(payload?.ready);
-    if (!isConnected && derivedStatus === 'connected') {
-      derivedStatus = 'disconnected';
-    }
+    const isConnected = derivedStatus === 'connected' && isCurrentAdmin;
     const canReconnect = Boolean(payload?.canReconnect);
 
     setWhatsappStatus(derivedStatus);
     setWhatsappConnected(isConnected);
     setWhatsappCanReconnect(canReconnect);
+    setWhatsappActionStatus('');
 
     if (isConnected) {
       updateWhatsappQr('');
@@ -387,26 +418,18 @@ export default function SettingsPage() {
   }, [normalizePairingPhone, updateWhatsappQr, user?.id]);
 
   const fetchWhatsAppApi = useCallback(async (path, options = {}, retry = true) => {
-    const token = await getBackendJwt();
-    const headers = {
-      ...(options.headers || {}),
-      Authorization: `Bearer ${token}`,
-    };
-    const response = await fetch(`${WHATSAPP_API_BASE}${path}`, {
+    const response = await fetch(`/api${path}`, {
       ...options,
-      headers,
       credentials: 'include',
+      cache: 'no-store',
     });
 
     if (response.status === 401 && retry) {
-      const freshToken = await getBackendJwt({ forceRefresh: true });
-      return fetch(`${WHATSAPP_API_BASE}${path}`, {
+      await getBackendJwt({ forceRefresh: true });
+      return fetch(`/api${path}`, {
         ...options,
-        headers: {
-          ...(options.headers || {}),
-          Authorization: `Bearer ${freshToken}`,
-        },
         credentials: 'include',
+        cache: 'no-store',
       });
     }
 
@@ -816,8 +839,18 @@ export default function SettingsPage() {
     try {
       if (!user?.id) return;
       const response = await fetchWhatsAppApi(
-        `/whatsapp/status?adminId=${user.id}`
+        `/whatsapp/status?adminId=${user.id}&ts=${Date.now()}`,
+        {
+          headers: {
+            'Cache-Control': 'no-cache',
+            Pragma: 'no-cache',
+          },
+          cache: 'no-store',
+        }
       );
+      if (response.status === 304) {
+        return null;
+      }
       if (!response.ok) {
         throw new Error('Failed to load WhatsApp status');
       }
@@ -828,7 +861,6 @@ export default function SettingsPage() {
     } catch (error) {
       if (isMountedRef.current) {
         markWhatsappDisconnectedUi();
-        setWhatsappActionStatus('Could not load WhatsApp status.');
       }
     }
     return null;
@@ -837,9 +869,11 @@ export default function SettingsPage() {
   useEffect(() => {
     const isMountedRef = { current: true };
     let socket = null;
+    whatsappSocketClosingRef.current = false;
     if (!user?.id) {
       return () => {
         isMountedRef.current = false;
+        whatsappSocketClosingRef.current = true;
         if (socket) socket.disconnect();
       };
     }
@@ -856,9 +890,13 @@ export default function SettingsPage() {
       try {
         const token = await getBackendJwt();
         if (!isMountedRef.current) return;
-        socket = io(WHATSAPP_SOCKET_URL, {
+        socket = io(buildWhatsAppOriginCandidates(WHATSAPP_SOCKET_URL)[0] || WHATSAPP_SOCKET_URL, {
           query: { adminId: user?.id },
           auth: { token },
+        });
+
+        socket.on('connect', () => {
+          whatsappSocketClosingRef.current = false;
         });
 
         socket.on('whatsapp:status', (payload) => {
@@ -902,23 +940,23 @@ export default function SettingsPage() {
         });
 
         socket.on('connect_error', () => {
+          if (!isMountedRef.current || whatsappSocketClosingRef.current) return;
           markWhatsappDisconnectedUi();
-          setWhatsappActionStatus('Could not connect to WhatsApp.');
         });
 
         socket.on('disconnect', () => {
+          if (!isMountedRef.current || whatsappSocketClosingRef.current) return;
           markWhatsappDisconnectedUi();
-          setWhatsappActionStatus('Could not connect to WhatsApp.');
         });
       } catch (error) {
         if (!isMountedRef.current) return;
         markWhatsappDisconnectedUi();
-        setWhatsappActionStatus('Could not connect to WhatsApp.');
       }
     })();
 
     return () => {
       isMountedRef.current = false;
+      whatsappSocketClosingRef.current = true;
       clearInterval(pollTimer);
       window.removeEventListener('focus', handleFocus);
       if (socket) socket.disconnect();
@@ -2099,10 +2137,10 @@ export default function SettingsPage() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-                  <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
                     <p className="text-xs uppercase tracking-wide text-aa-gray">Business Profile</p>
-                    <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
                       <Input
                         label="Phone Number"
                         value={whatsappConfig.phone}
@@ -2124,7 +2162,7 @@ export default function SettingsPage() {
                         placeholder="Not connected"
                         disabled
                       />
-                      <div className="flex flex-col">
+                      <div className="min-w-0 flex flex-col">
                         <Input
                           label="Business Category"
                           value={whatsappConfig.category}
@@ -2134,7 +2172,7 @@ export default function SettingsPage() {
                           Category describes your domain like retail, shop, crackers, clinic, etc.
                         </p>
                       </div>
-                      <div className="flex flex-col">
+                      <div className="min-w-0 flex flex-col">
                         <Input
                           label="Business Type"
                           value={getBusinessTypeLabel(whatsappConfig.businessType)}
@@ -2147,7 +2185,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-4 sm:p-5">
+                  <div className="min-w-0 rounded-2xl border border-dashed border-gray-200 bg-white p-4 sm:p-5">
                     <p className="text-xs uppercase tracking-wide text-aa-gray">Link Options</p>
 
                     <div className="mt-3">
@@ -2168,9 +2206,9 @@ export default function SettingsPage() {
                     </div>
 
                     {whatsappPairingCode && !whatsappConnected ? (
-                      <div className="mt-4 rounded-xl border border-aa-orange/30 bg-aa-orange/5 px-4 py-3">
+                      <div className="mt-4 min-w-0 rounded-xl border border-aa-orange/30 bg-aa-orange/5 px-4 py-3">
                         <p className="text-xs uppercase tracking-wide text-aa-gray">Link Code</p>
-                        <p className="mt-2 text-2xl font-bold tracking-[0.2em] text-aa-dark-blue">
+                        <p className="mt-2 break-all text-lg font-bold tracking-[0.12em] text-aa-dark-blue sm:text-2xl sm:tracking-[0.2em]">
                           {whatsappPairingCode}
                         </p>
                         <p className="mt-2 text-xs text-aa-gray">
@@ -2180,7 +2218,7 @@ export default function SettingsPage() {
                     ) : null}
 
                     {!whatsappConnected && whatsappQr ? (
-                      <div className="mt-4 flex flex-col items-center gap-3">
+                      <div className="mt-4 flex min-w-0 flex-col items-center gap-3">
                         <img
                           key={whatsappQrVersion}
                           src={whatsappQr}
@@ -2192,7 +2230,7 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     ) : (
-                      <div className="mt-4 rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-aa-gray">
+                      <div className="mt-4 min-w-0 rounded-xl bg-gray-50 px-4 py-8 text-center text-sm text-aa-gray">
                         QR code or link code will show here after you start.
                       </div>
                     )}

@@ -889,7 +889,7 @@ export default function CatalogPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className={`text-xs font-semibold uppercase tracking-[0.18em] ${accentClass}`}>{title}</p>
-              <p className="mt-1 text-[11px] text-aa-gray">Simple view of what customers get first.</p>
+              <p className="mt-1 text-[11px] text-aa-gray">Preview of the first WhatsApp items customers will see.</p>
             </div>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <span className={`rounded-full px-3 py-1 text-[11px] font-semibold whitespace-nowrap ${badgeClass}`}>
@@ -981,7 +981,7 @@ export default function CatalogPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-aa-dark-blue mb-2">{catalogLabel}</h1>
           <p className="text-aa-gray">
-            Set what customers see in WhatsApp. Pin items for the first message and keep your menu simple.
+            Control exactly what appears in WhatsApp. Hidden items stay out of WhatsApp, and visible items follow your first-message and menu order.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -1167,8 +1167,8 @@ export default function CatalogPage() {
                             )}
                             <Badge variant={item.show_on_whatsapp === false ? 'default' : 'blue'}>
                               {item.show_on_whatsapp === false
-                                ? 'Hidden in WhatsApp menu'
-                                : 'Shown in WhatsApp menu'}
+                                ? 'Hidden from WhatsApp'
+                                : 'Visible in WhatsApp'}
                             </Badge>
                             {item.item_type === 'service' && (
                               <Badge variant="default">
@@ -1258,10 +1258,10 @@ export default function CatalogPage() {
 
                     <div className="shrink-0 border-t border-[#f3dfc4] bg-[#fff9f2] p-4 sm:p-5 xl:w-64 xl:border-l xl:border-t-0 2xl:w-72">
                       <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-aa-orange">
-                        Quick Actions
+                        WhatsApp Controls
                       </h4>
                       <p className="mb-3 text-[11px] text-aa-gray">
-                        Use these buttons to control what customers see.
+                        Choose visibility, first-message priority, and menu order.
                       </p>
 
                       <div className="mb-4 space-y-2">
@@ -1295,13 +1295,13 @@ export default function CatalogPage() {
                         >
                           <FontAwesomeIcon icon={faStar} style={{ fontSize: 12 }} />
                           <span className="break-words text-left">
-                            {featuredRank ? 'Unpin from First Message' : 'Pin to First Message'}
+                            {featuredRank ? 'Remove from First Message' : 'Show First in WhatsApp'}
                           </span>
                         </button>
                       </div>
 
-                      <h4 className="mb-1 text-xs font-semibold text-aa-dark-blue">Change order</h4>
-                      <p className="mb-2 text-[11px] text-aa-gray">Move this item up or down.</p>
+                      <h4 className="mb-1 text-xs font-semibold text-aa-dark-blue">Reorder</h4>
+                      <p className="mb-2 text-[11px] text-aa-gray">Move this item in the first message or WhatsApp menu.</p>
                       <div className="mb-3 grid grid-cols-2 gap-1.5">
                         <button
                           type="button"
@@ -1314,7 +1314,7 @@ export default function CatalogPage() {
                           disabled={actionDisabled || !featuredPosition || featuredPosition.index === 0}
                         >
                           <FontAwesomeIcon icon={faArrowUp} style={{ fontSize: 11 }} />
-                          <span className="break-words">Pin Up</span>
+                          <span className="break-words">First Up</span>
                         </button>
                         <button
                           type="button"
@@ -1333,7 +1333,7 @@ export default function CatalogPage() {
                           }
                         >
                           <FontAwesomeIcon icon={faArrowDown} style={{ fontSize: 11 }} />
-                          <span className="break-words">Pin Down</span>
+                          <span className="break-words">First Down</span>
                         </button>
                         <button
                           type="button"
@@ -1370,19 +1370,19 @@ export default function CatalogPage() {
                       </div>
 
                       <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-aa-gray">
-                        <span>Menu spot {catalogPosition ? `#${catalogPosition.index + 1}` : 'not set'}</span>
+                        <span>WhatsApp menu {catalogPosition ? `#${catalogPosition.index + 1}` : 'hidden'}</span>
                         <span>
                           First message{' '}
                           {featuredRank
                             ? `pinned${featuredPosition ? ` #${featuredPosition.index + 1}` : ''}`
-                            : 'auto add'}
+                            : 'not pinned'}
                         </span>
                       </div>
 
                       {featuredRank ? (
                         <div className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-aa-orange">
                           <FontAwesomeIcon icon={faStar} style={{ fontSize: 11 }} />
-                          Pinned for First Message
+                          Showing in First Message
                         </div>
                       ) : null}
                     </div>
@@ -1411,7 +1411,7 @@ export default function CatalogPage() {
                   </span>
                 </div>
                 <p className="mt-3 text-sm text-white/80">
-                  Set item counts first. Pinned items are always shown before others.
+                  Set how many products and services show first. Items you pin always appear before the rest.
                 </p>
               </div>
 

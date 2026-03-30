@@ -1213,7 +1213,7 @@ export default function DashboardPage() {
 									whatsapp_recovery_ai_model: e.target.value,
 								}))
 							}
-							placeholder="e.g. google/gemini-2.0-flash-001"
+							placeholder="e.g. anthropic/claude-3.5-sonnet"
 							className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
 						/>
 					</div>

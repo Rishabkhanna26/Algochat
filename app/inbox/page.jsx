@@ -198,22 +198,17 @@ export default function InboxPage() {
 
     const fetchStatus = async () => {
       try {
-        const token = await getBackendJwt();
         if (!mounted) return;
-        const response = await fetch(`${WHATSAPP_API_BASE}/whatsapp/status?adminId=${user.id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        const response = await fetch(`/api/whatsapp/status?adminId=${user.id}`, {
           credentials: 'include',
+          cache: 'no-store',
         });
         if (response.status === 401) {
-          const freshToken = await getBackendJwt({ forceRefresh: true });
+          await getBackendJwt({ forceRefresh: true });
           if (!mounted) return;
-          const retryResponse = await fetch(`${WHATSAPP_API_BASE}/whatsapp/status?adminId=${user.id}`, {
-            headers: {
-              Authorization: `Bearer ${freshToken}`,
-            },
+          const retryResponse = await fetch(`/api/whatsapp/status?adminId=${user.id}`, {
             credentials: 'include',
+            cache: 'no-store',
           });
           const retryData = await retryResponse.json();
           if (!mounted) return;

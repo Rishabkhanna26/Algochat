@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faUsers, faMagnifyingGlass, faPhone, faEnvelope } from '@fortawesome/free-solid-svg-icons';
+import { faUsers, faMagnifyingGlass, faPhone, faEnvelope, faTrashCan } from '@fortawesome/free-solid-svg-icons';
 import Loader from '../components/common/Loader.jsx';
 import Modal from '../components/common/Modal.jsx';
 import { useToast } from '../components/common/ToastProvider.jsx';
+import { useAuth } from '../components/auth/AuthProvider.jsx';
+import { isRestrictedModeUser } from '../../lib/access.js';
 
 export default function ContactsPage() {
+  const { user } = useAuth();
   const { pushToast } = useToast();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +34,8 @@ export default function ContactsPage() {
   const [chatSending, setChatSending] = useState(false);
   const [chatSendError, setChatSendError] = useState('');
   const [automationUpdatingId, setAutomationUpdatingId] = useState(null);
+  const [deletingUserId, setDeletingUserId] = useState(null);
+  const restrictedMode = isRestrictedModeUser(user);
 
   useEffect(() => {
     if (!chatSendError) return;
@@ -245,6 +250,55 @@ export default function ContactsPage() {
     }
   };
 
+  const deleteLead = async (targetUser) => {
+    if (!targetUser?.id || deletingUserId === targetUser.id || restrictedMode) return;
+    const label = targetUser.name || targetUser.phone || targetUser.email || `Lead #${targetUser.id}`;
+    const confirmed = window.confirm(
+      `Delete ${label}? This permanently removes the lead and related messages, lead notes, tasks, and appointments.`
+    );
+    if (!confirmed) return;
+
+    setDeletingUserId(targetUser.id);
+    try {
+      const response = await fetch(`/api/users/${targetUser.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || 'Could not delete lead.');
+      }
+
+      setUsers((prev) => prev.filter((item) => item.id !== targetUser.id));
+      setSelectedUser((prev) => (prev?.id === targetUser.id ? null : prev));
+      setMessages((prev) => (selectedUser?.id === targetUser.id ? [] : prev));
+      setLatestRequirement((prev) => (selectedUser?.id === targetUser.id ? null : prev));
+      setChatUser((prev) => (prev?.id === targetUser.id ? null : prev));
+      setChatMessages((prev) => (chatUser?.id === targetUser.id ? [] : prev));
+      if (selectedUser?.id === targetUser.id) {
+        setModalOpen(false);
+      }
+      if (chatUser?.id === targetUser.id) {
+        setChatOpen(false);
+        setChatDraft('');
+        setChatError('');
+      }
+      pushToast({
+        type: 'success',
+        title: 'Deleted',
+        message: 'Lead removed.',
+      });
+    } catch (error) {
+      pushToast({
+        type: 'error',
+        title: 'Not deleted',
+        message: error.message || 'Could not delete lead.',
+      });
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   const filteredUsers = users;
 
   if (loading) {
@@ -316,6 +370,7 @@ export default function ContactsPage() {
                 <button
                   className="flex-1 px-3 py-1 bg-aa-orange text-white rounded text-sm font-semibold hover:bg-opacity-90 transition"
                   onClick={() => openChat(user)}
+                  disabled={restrictedMode}
                 >
                   Message
                 </button>
@@ -333,13 +388,21 @@ export default function ContactsPage() {
                     : 'border-red-600 text-red-600 hover:bg-red-50'
                 }`}
                 onClick={() => toggleContactAutomation(user)}
-                disabled={automationUpdatingId === user.id}
+                disabled={automationUpdatingId === user.id || restrictedMode}
               >
                 {automationUpdatingId === user.id
                   ? 'Updating...'
                   : user.automation_disabled
                     ? 'Turn On Auto Reply'
                     : 'Turn Off Auto Reply'}
+              </button>
+              <button
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded border border-red-600 px-3 py-1 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => deleteLead(user)}
+                disabled={deletingUserId === user.id || restrictedMode}
+              >
+                <FontAwesomeIcon icon={faTrashCan} style={{ fontSize: 14 }} />
+                {deletingUserId === user.id ? 'Deleting...' : 'Delete Lead'}
               </button>
             </div>
           ))
@@ -390,13 +453,21 @@ export default function ContactsPage() {
                   : 'border-red-600 text-red-600 hover:bg-red-50'
               }`}
               onClick={() => toggleContactAutomation(selectedUser)}
-              disabled={automationUpdatingId === selectedUser.id}
+              disabled={automationUpdatingId === selectedUser.id || restrictedMode}
             >
               {automationUpdatingId === selectedUser.id
                 ? 'Updating...'
                 : selectedUser.automation_disabled
                   ? 'Turn On Auto Reply for This Lead'
                   : 'Turn Off Auto Reply for This Lead'}
+            </button>
+
+            <button
+              className="w-full rounded border border-red-600 px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => deleteLead(selectedUser)}
+              disabled={deletingUserId === selectedUser.id || restrictedMode}
+            >
+              {deletingUserId === selectedUser.id ? 'Deleting lead...' : 'Delete This Lead'}
             </button>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

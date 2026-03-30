@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   faGauge,
@@ -35,6 +35,7 @@ import {
 
 export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClose }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const [inboxCount, setInboxCount] = useState(0);
   const [typeRequestCount, setTypeRequestCount] = useState(0);
@@ -283,7 +284,14 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
 
             <div className="space-y-2">
               {section.items.map((item) => {
-                const isActive = pathname === item.path;
+                const [itemPathname, itemQuery = ''] = String(item.path || '').split('?');
+                const expectedParams = new URLSearchParams(itemQuery);
+                const isQueryMatch =
+                  itemQuery.length === 0 ||
+                  Array.from(expectedParams.entries()).every(
+                    ([key, value]) => searchParams.get(key) === value
+                  );
+                const isActive = pathname === itemPathname && isQueryMatch;
                 const compact = collapsed && !mobileOpen;
                 const isReadOnly = restrictedMode && item.path !== '/dashboard';
 
@@ -298,12 +306,12 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                     data-testid={`sidebar-${item.name.toLowerCase()}`}
                     title={isReadOnly ? `${item.name} (View only)` : item.name}
                     className="block"
-                  >
-                    <div
-                      className={`group relative overflow-hidden rounded-2xl ${compact ? 'p-2' : 'px-3 py-2.5'} transition-colors ${
+                    >
+                      <div
+                        className={`group relative overflow-hidden rounded-2xl ${compact ? 'p-2' : 'px-3 py-2.5'} transition-colors ${
                         isActive
                             ? 'bg-white/10'
-                            : 'hover:bg-white/7'
+                            : 'hover:bg-white/10'
                       }`}
                     >
                       <div
@@ -312,7 +320,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                             ? 'bg-aa-orange opacity-100'
                             : isReadOnly
                               ? 'bg-white/20 opacity-30'
-                              : 'bg-white/20 opacity-0 group-hover:opacity-70'
+                              : 'bg-aa-orange opacity-0 group-hover:opacity-100'
                         }`}
                       />
                       <div
@@ -322,7 +330,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                           className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
                             isActive
                               ? 'border-aa-orange/40 bg-aa-orange/15 text-white'
-                              : 'border-white/10 bg-white/5 text-white/80 group-hover:text-white'
+                              : 'border-white/10 bg-white/5 text-white/80 group-hover:border-aa-orange/40 group-hover:bg-aa-orange/15 group-hover:text-white'
                           } transition-colors`}
                         >
                           <FontAwesomeIcon icon={item.icon} style={{ fontSize: 18 }} />
@@ -351,8 +359,10 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                         {showLabels && item.badge && !isReadOnly && (
                           <div className="shrink-0">
                             <span
-                              className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold ${
-                                isActive ? 'bg-aa-orange text-white' : 'bg-white/10 text-white/80'
+                              className={`inline-flex items-center rounded-full px-2 py-1 text-[10px] font-bold transition-colors ${
+                                isActive
+                                  ? 'bg-aa-orange text-white'
+                                  : 'bg-white/10 text-white/80 group-hover:bg-aa-orange group-hover:text-white'
                               }`}
                             >
                               {item.badge}
@@ -361,9 +371,11 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                         )}
                       </div>
 
-                      {isActive && (
-                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-aa-orange/20 to-transparent" />
-                      )}
+                      <div
+                        className={`pointer-events-none absolute inset-0 bg-gradient-to-r from-aa-orange/20 to-transparent transition-opacity ${
+                          isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
+                      />
                     </div>
                   </Link>
                 );
