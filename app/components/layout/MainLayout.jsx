@@ -117,8 +117,8 @@ export default function MainLayout({ children }) {
   }
 
   // Normal layout
-  const desktopOffset = sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64';
-  const navbarDesktopOffset = sidebarCollapsed ? 'lg:left-20' : 'lg:left-64';
+  const desktopOffset = sidebarCollapsed ? 'lg:ml-24' : 'lg:ml-64';
+  const navbarDesktopOffset = sidebarCollapsed ? 'lg:left-24' : 'lg:left-64';
 
   return (
     <ToastProvider>

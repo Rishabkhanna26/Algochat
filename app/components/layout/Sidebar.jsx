@@ -171,7 +171,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     .filter((section) => section.items.length > 0);
 
   const widthClass = collapsed
-    ? 'w-[85vw] max-w-[300px] lg:w-20'
+    ? 'w-[85vw] max-w-[300px] lg:w-24'
     : 'w-[85vw] max-w-[320px] lg:w-64';
   const translateClass = mobileOpen ? 'translate-x-0' : '-translate-x-full';
   const motionClass = mobileOpen ? 'aa-slide-left' : '';
@@ -193,7 +193,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
       <div
         className={
           compactDesktop
-            ? 'border-b border-white/10 px-3 py-4'
+            ? 'border-b border-white/10 px-4 py-5'
             : 'border-b border-white/10 px-4 py-5 sm:px-6 sm:py-6'
         }
       >
@@ -213,7 +213,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
           >
             <div
               className={`flex shrink-0 items-center justify-center overflow-hidden border border-white/20 bg-gradient-to-br from-white/15 via-white/10 to-white/5 shadow-[0_12px_30px_rgba(0,0,0,0.25)] ${
-                compactDesktop ? 'h-12 w-12 rounded-2xl p-2' : 'h-14 w-14 rounded-[20px] p-2'
+                compactDesktop ? 'h-14 w-14 rounded-[20px] p-2.5' : 'h-14 w-14 rounded-[20px] p-2'
               }`}
             >
               <Image
@@ -222,7 +222,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                 width={64}
                 height={64}
                 className="h-full w-full object-contain"
-                sizes={compactDesktop ? '56px' : '64px'}
+                sizes={compactDesktop ? '64px' : '64px'}
                 priority
               />
             </div>
@@ -271,7 +271,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
       </div>
 
       {/* Menu Items */}
-      <nav className="relative flex-1 overflow-y-auto px-3 py-5">
+      <nav className={`relative flex-1 overflow-y-auto py-5 ${compactDesktop ? 'px-3.5' : 'px-3'}`}>
         {grouped.map((section) => (
           <div key={section.id} className="mb-6 last:mb-0">
             {showLabels && (
@@ -308,7 +308,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                     className="block"
                     >
                       <div
-                        className={`group relative overflow-hidden rounded-2xl ${compact ? 'p-2' : 'px-3 py-2.5'} transition-colors ${
+                        className={`group relative overflow-hidden rounded-2xl ${compact ? 'px-2.5 py-2.5' : 'px-3 py-2.5'} transition-colors ${
                         isActive
                             ? 'bg-white/10'
                             : 'hover:bg-white/10'
@@ -327,7 +327,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
                         className={`flex items-center ${compact ? 'justify-center' : 'gap-3'}`}
                       >
                         <div
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${
+                          className={`flex ${compact ? 'h-11 w-11 rounded-[18px]' : 'h-10 w-10 rounded-2xl'} shrink-0 items-center justify-center border ${
                             isActive
                               ? 'border-aa-orange/40 bg-aa-orange/15 text-white'
                               : 'border-white/10 bg-white/5 text-white/80 group-hover:border-aa-orange/40 group-hover:bg-aa-orange/15 group-hover:text-white'
