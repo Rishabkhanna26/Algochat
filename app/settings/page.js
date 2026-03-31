@@ -38,6 +38,7 @@ const WHATSAPP_API_BASE =
 const WHATSAPP_SOCKET_URL =
   process.env.NEXT_PUBLIC_WHATSAPP_SOCKET_URL || WHATSAPP_API_BASE;
 const LOCALHOST_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+const WHATSAPP_AUTO_RECONNECT_COOLDOWN_MS = 15000;
 
 const buildWhatsAppOriginCandidates = (baseUrl) => {
   const candidates = [];
@@ -203,12 +204,22 @@ export default function SettingsPage() {
   const [whatsappQr, setWhatsappQr] = useState('');
   const [whatsappPairingCode, setWhatsappPairingCode] = useState('');
   const [whatsappPairingPhoneInput, setWhatsappPairingPhoneInput] = useState('');
+  const [whatsappHasSavedSession, setWhatsappHasSavedSession] = useState(false);
+  const [whatsappCanReconnect, setWhatsappCanReconnect] = useState(false);
+  const [whatsappAutoReconnectEnabled, setWhatsappAutoReconnectEnabled] = useState(false);
+  const [whatsappAutoReconnectSaving, setWhatsappAutoReconnectSaving] = useState(false);
+  const [whatsappAutoReconnectStatus, setWhatsappAutoReconnectStatus] = useState('');
+  const [whatsappReconnectLoading, setWhatsappReconnectLoading] = useState(false);
   const [whatsappQrVersion, setWhatsappQrVersion] = useState(0);
   const whatsappAuthMethodRef = useRef('qr');
   const whatsappStatusRef = useRef('idle');
   const whatsappQrRef = useRef('');
   const whatsappPairingCodeRef = useRef('');
+  const whatsappHasSavedSessionRef = useRef(false);
+  const whatsappCanReconnectRef = useRef(false);
   const whatsappQrJobRef = useRef(0);
+  const whatsappReconnectInFlightRef = useRef(false);
+  const whatsappReconnectLastAttemptRef = useRef(0);
   const whatsappSocketClosingRef = useRef(false);
   const settingsMountedRef = useRef(true);
   const [whatsappActionStatus, setWhatsappActionStatus] = useState('');
@@ -402,6 +413,16 @@ export default function SettingsPage() {
     const nextStatus = String(payload?.status || 'disconnected');
     const requestedAuthMethod = whatsappAuthMethodRef.current;
     const incomingAuthMethod = String(payload?.authMethod || '').trim().toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(payload || {}, 'hasSavedSession')) {
+      const nextHasSavedSession = payload?.hasSavedSession === true;
+      whatsappHasSavedSessionRef.current = nextHasSavedSession;
+      setWhatsappHasSavedSession(nextHasSavedSession);
+    }
+    if (Object.prototype.hasOwnProperty.call(payload || {}, 'canReconnect')) {
+      const nextCanReconnect = payload?.canReconnect === true;
+      whatsappCanReconnectRef.current = nextCanReconnect;
+      setWhatsappCanReconnect(nextCanReconnect);
+    }
     const isCurrentAdmin =
       !payload?.activeAdminId || !user?.id || payload.activeAdminId === user.id;
     const nextAuthMethod =
@@ -725,6 +746,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (user) {
+      setWhatsappAutoReconnectEnabled(Boolean(user.whatsapp_auto_reconnect));
       setProfile((prev) => ({
         name: user.name || prev.name,
         email: user.email || prev.email,
@@ -785,6 +807,7 @@ export default function SettingsPage() {
             data.data?.free_delivery_product_rules
           ),
         });
+        setWhatsappAutoReconnectEnabled(Boolean(data.data?.whatsapp_auto_reconnect));
         setProfilePhotoPreview(data.data?.profile_photo_url || null);
         if (data.data?.whatsapp_number || data.data?.whatsapp_name) {
           setWhatsappConfig((prev) => ({
@@ -941,6 +964,10 @@ export default function SettingsPage() {
     let socket = null;
     whatsappSocketClosingRef.current = false;
     if (!user?.id) {
+      setWhatsappHasSavedSession(false);
+      setWhatsappCanReconnect(false);
+      whatsappHasSavedSessionRef.current = false;
+      whatsappCanReconnectRef.current = false;
       return () => {
         isMountedRef.current = false;
         whatsappSocketClosingRef.current = true;
@@ -1044,6 +1071,124 @@ export default function SettingsPage() {
     user?.id,
   ]);
 
+  const persistWhatsappAutoReconnect = useCallback(
+    async (nextEnabled) => {
+      if (!user?.id) return;
+      const previousValue = whatsappAutoReconnectEnabled;
+      setWhatsappAutoReconnectStatus('');
+      setWhatsappAutoReconnectSaving(true);
+      setWhatsappAutoReconnectEnabled(nextEnabled);
+      try {
+        const response = await fetch('/api/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            whatsapp_auto_reconnect: nextEnabled,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Failed to update WhatsApp auto reconnect setting.');
+        }
+        const savedValue = Boolean(payload?.data?.whatsapp_auto_reconnect);
+        setWhatsappAutoReconnectEnabled(savedValue);
+        setWhatsappAutoReconnectStatus('Auto reconnect setting saved.');
+      } catch (error) {
+        setWhatsappAutoReconnectEnabled(previousValue);
+        setWhatsappAutoReconnectStatus(
+          error.message || 'Failed to update WhatsApp auto reconnect setting.'
+        );
+      } finally {
+        setWhatsappAutoReconnectSaving(false);
+      }
+    },
+    [user?.id, whatsappAutoReconnectEnabled]
+  );
+
+  const handleReconnectWhatsApp = useCallback(
+    async ({ auto = false } = {}) => {
+      if (!user?.id) return;
+      if (whatsappReconnectInFlightRef.current) return;
+      const reconnectAvailable =
+        whatsappCanReconnectRef.current || whatsappHasSavedSessionRef.current;
+      if (!reconnectAvailable) return;
+      const currentStatus = String(whatsappStatusRef.current || '');
+      if (['starting', 'qr', 'code', 'connected', 'connected_other'].includes(currentStatus)) {
+        return;
+      }
+      const now = Date.now();
+      if (
+        auto &&
+        now - whatsappReconnectLastAttemptRef.current < WHATSAPP_AUTO_RECONNECT_COOLDOWN_MS
+      ) {
+        return;
+      }
+
+      whatsappReconnectInFlightRef.current = true;
+      whatsappReconnectLastAttemptRef.current = now;
+      setWhatsappReconnectLoading(true);
+      if (!auto) {
+        setWhatsappActionStatus('');
+      }
+      setWhatsappAuthMode('qr');
+      setWhatsappStatusValue('starting');
+      setWhatsappConnected(false);
+      updateWhatsappPairingCode('');
+      updateWhatsappQr('');
+
+      try {
+        const response = await fetchWhatsAppApi('/whatsapp/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            adminId: user.id,
+            authMethod: 'qr',
+          }),
+        });
+        const payload = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Could not reconnect WhatsApp.');
+        }
+        await fetchWhatsAppStatus(settingsMountedRef);
+      } catch (error) {
+        if (!auto) {
+          setWhatsappActionStatus(error.message || 'Could not reconnect WhatsApp.');
+        } else {
+          console.warn('WhatsApp auto reconnect failed:', error);
+        }
+      } finally {
+        setWhatsappReconnectLoading(false);
+        whatsappReconnectInFlightRef.current = false;
+      }
+    },
+    [
+      fetchWhatsAppApi,
+      fetchWhatsAppStatus,
+      setWhatsappAuthMode,
+      setWhatsappStatusValue,
+      updateWhatsappPairingCode,
+      updateWhatsappQr,
+      user?.id,
+    ]
+  );
+
+  useEffect(() => {
+    if (!user?.id) return;
+    if (!whatsappAutoReconnectEnabled) return;
+    if (!whatsappCanReconnect) return;
+    if (whatsappConnected) return;
+    if (['starting', 'qr', 'code'].includes(String(whatsappStatus || '').toLowerCase())) return;
+    handleReconnectWhatsApp({ auto: true });
+  }, [
+    handleReconnectWhatsApp,
+    user?.id,
+    whatsappAutoReconnectEnabled,
+    whatsappCanReconnect,
+    whatsappConnected,
+    whatsappStatus,
+  ]);
+
   const handleStartWhatsApp = async ({ usePairingCode = false } = {}) => {
     try {
       setWhatsappActionStatus('');
@@ -1139,10 +1284,13 @@ export default function SettingsPage() {
       whatsappStatus === 'error' ||
       whatsappStatus === 'auth_failure') &&
     !whatsappConnected;
+  const showReconnectAction =
+    showConnectActions && whatsappCanReconnect && !whatsappConnected;
   const isStartBlocked =
     whatsappConnected ||
     whatsappStatus === 'connected_other' ||
-    isWhatsappPending;
+    isWhatsappPending ||
+    whatsappReconnectLoading;
   const showDisconnectAction = Boolean(whatsappConnected || isWhatsappPending);
   const whatsappTone = whatsappConnected ? 'green' : isWhatsappPending ? 'amber' : 'red';
   const showPairingCodePanel = Boolean(whatsappPairingCode && !whatsappConnected);
@@ -1184,6 +1332,8 @@ export default function SettingsPage() {
     ? 'Scan the QR code below with WhatsApp to connect.'
     : whatsappStatus === 'code'
     ? 'Use the code below in WhatsApp > Linked Devices > Link with phone number.'
+    : whatsappCanReconnect
+    ? 'Saved WhatsApp login found. Click reconnect to restore this session.'
     : 'WhatsApp is not connected right now.';
 
   return (
@@ -1880,6 +2030,9 @@ export default function SettingsPage() {
                               data.data?.free_delivery_product_rules
                             ),
                           });
+                          setWhatsappAutoReconnectEnabled(
+                            Boolean(data.data?.whatsapp_auto_reconnect)
+                          );
                           setProfilePhoto(null);
                           setProfilePhotoPreview(data.data?.profile_photo_url || null);
                           setSaveStatus('');
@@ -1955,6 +2108,7 @@ export default function SettingsPage() {
                                 profile.free_delivery_scope === 'eligible_only'
                                   ? normalizedProductRules
                                   : [],
+                              whatsapp_auto_reconnect: whatsappAutoReconnectEnabled,
                             }),
                           });
                           const contentType = response.headers.get('content-type') || '';
@@ -1987,6 +2141,9 @@ export default function SettingsPage() {
                               data.data?.free_delivery_product_rules
                             ),
                           });
+                          setWhatsappAutoReconnectEnabled(
+                            Boolean(data.data?.whatsapp_auto_reconnect)
+                          );
                           await refresh();
                           setSaveStatus('Profile updated.');
                           setTimeout(() => setSaveStatus(''), 2000);
@@ -2159,9 +2316,19 @@ export default function SettingsPage() {
                       </span>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
-                      {showConnectActions ? (
+                      {showReconnectAction ? (
                         <Button
                           variant="primary"
+                          onClick={() => handleReconnectWhatsApp({ auto: false })}
+                          disabled={isStartBlocked}
+                          className="w-full sm:w-auto"
+                        >
+                          {whatsappReconnectLoading ? 'Reconnecting...' : 'Reconnect'}
+                        </Button>
+                      ) : null}
+                      {showConnectActions ? (
+                        <Button
+                          variant={showReconnectAction ? 'outline' : 'primary'}
                           onClick={() => handleStartWhatsApp({ usePairingCode: true })}
                           disabled={isStartBlocked}
                           className="w-full sm:w-auto"
@@ -2201,6 +2368,40 @@ export default function SettingsPage() {
                   >
                     {whatsappStatusMessage}
                   </p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-aa-text-dark">Auto Reconnect</p>
+                      <p className="mt-1 text-xs text-aa-gray">
+                        If WhatsApp disconnects and a saved login exists, reconnect will be tried automatically.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer self-start">
+                      <input
+                        type="checkbox"
+                        checked={whatsappAutoReconnectEnabled}
+                        onChange={(event) =>
+                          persistWhatsappAutoReconnect(Boolean(event.target.checked))
+                        }
+                        disabled={whatsappAutoReconnectSaving}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-aa-orange"></div>
+                    </label>
+                  </div>
+                  {whatsappAutoReconnectStatus ? (
+                    <p
+                      className={`mt-3 text-xs ${
+                        /fail|error|invalid|could not/i.test(whatsappAutoReconnectStatus)
+                          ? 'text-red-600'
+                          : 'text-green-600'
+                      }`}
+                    >
+                      {whatsappAutoReconnectStatus}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
