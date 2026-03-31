@@ -1,6 +1,7 @@
 import './globals.css'
 import MainLayout from './components/layout/MainLayout.jsx'
 import { AuthProvider } from './components/auth/AuthProvider.jsx'
+import { SpeedInsights } from '@vercel/speed-insights/next'
 
 export const metadata = {
   title: 'AlgoChat - WhatsApp CRM Dashboard',
@@ -96,6 +97,7 @@ export default function RootLayout({ children }) {
             {children}
           </MainLayout>
         </AuthProvider>
+        <SpeedInsights />
       </body>
     </html>
   )
