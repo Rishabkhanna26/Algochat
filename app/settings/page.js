@@ -198,15 +198,16 @@ export default function SettingsPage() {
   const [accentColor, setAccentColor] = useState(DEFAULT_ACCENT_COLOR);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [whatsappConnected, setWhatsappConnected] = useState(false);
-  const [whatsappCanReconnect, setWhatsappCanReconnect] = useState(false);
   const [whatsappStatus, setWhatsappStatus] = useState('idle');
-  const [whatsappAuthMethod, setWhatsappAuthMethod] = useState('code');
+  const [whatsappAuthMethod, setWhatsappAuthMethod] = useState('qr');
   const [whatsappQr, setWhatsappQr] = useState('');
   const [whatsappPairingCode, setWhatsappPairingCode] = useState('');
   const [whatsappPairingPhoneInput, setWhatsappPairingPhoneInput] = useState('');
   const [whatsappQrVersion, setWhatsappQrVersion] = useState(0);
-  const whatsappAuthMethodRef = useRef('code');
+  const whatsappAuthMethodRef = useRef('qr');
+  const whatsappStatusRef = useRef('idle');
   const whatsappQrRef = useRef('');
+  const whatsappPairingCodeRef = useRef('');
   const whatsappQrJobRef = useRef(0);
   const whatsappSocketClosingRef = useRef(false);
   const settingsMountedRef = useRef(true);
@@ -364,6 +365,12 @@ export default function SettingsPage() {
     setWhatsappAuthMethod(normalized);
   }, []);
 
+  const setWhatsappStatusValue = useCallback((nextStatus) => {
+    const normalized = String(nextStatus || 'disconnected');
+    whatsappStatusRef.current = normalized;
+    setWhatsappStatus(normalized);
+  }, []);
+
   const updateWhatsappQr = useCallback((nextQr) => {
     const normalized = nextQr || '';
     if (whatsappQrRef.current === normalized) return;
@@ -373,70 +380,110 @@ export default function SettingsPage() {
     whatsappQrJobRef.current += 1;
   }, []);
 
+  const updateWhatsappPairingCode = useCallback((nextCode) => {
+    const normalized = String(nextCode || '').trim();
+    whatsappPairingCodeRef.current = normalized;
+    setWhatsappPairingCode(normalized);
+  }, []);
+
   const normalizePairingPhone = useCallback((value) => {
     return String(value || '').replace(/\D/g, '').slice(0, 15);
   }, []);
 
-  const markWhatsappDisconnectedUi = useCallback(({ allowReconnect = true } = {}) => {
-    setWhatsappStatus('disconnected');
+  const markWhatsappDisconnectedUi = useCallback(() => {
+    setWhatsappStatusValue('disconnected');
     setWhatsappConnected(false);
-    setWhatsappAuthMode('code');
-    if (!allowReconnect) {
-      setWhatsappCanReconnect(false);
-    }
+    setWhatsappAuthMode('qr');
     updateWhatsappQr('');
-    setWhatsappPairingCode('');
-  }, [setWhatsappAuthMode, updateWhatsappQr]);
+    updateWhatsappPairingCode('');
+  }, [setWhatsappAuthMode, setWhatsappStatusValue, updateWhatsappPairingCode, updateWhatsappQr]);
 
   const applyWhatsappStatusPayload = useCallback((payload = {}) => {
     const nextStatus = String(payload?.status || 'disconnected');
+    const requestedAuthMethod = whatsappAuthMethodRef.current;
+    const incomingAuthMethod = String(payload?.authMethod || '').trim().toLowerCase();
     const isCurrentAdmin =
       !payload?.activeAdminId || !user?.id || payload.activeAdminId === user.id;
     const nextAuthMethod =
-      String(payload?.authMethod || '').trim().toLowerCase() === 'qr'
+      incomingAuthMethod === 'qr'
         ? 'qr'
-        : String(payload?.authMethod || '').trim().toLowerCase() === 'code'
+        : incomingAuthMethod === 'code'
         ? 'code'
-        : whatsappAuthMethodRef.current;
+        : requestedAuthMethod;
     let derivedStatus =
       nextStatus === 'connected' && !isCurrentAdmin
         ? 'connected_other'
         : nextStatus;
     const isConnected = derivedStatus === 'connected' && isCurrentAdmin;
-    const canReconnect = Boolean(payload?.canReconnect);
+    const currentStatus = whatsappStatusRef.current;
+    const hasIncomingQr = Boolean(payload?.qrImage || payload?.qr);
+    const hasIncomingCode = Boolean(payload?.pairingCode || payload?.code);
+    const hasCurrentQr = Boolean(whatsappQrRef.current);
+    const hasCurrentCode = Boolean(whatsappPairingCodeRef.current);
+    const shouldIgnorePendingRegression =
+      derivedStatus === 'starting' &&
+      (currentStatus === 'qr' || currentStatus === 'code') &&
+      ((currentStatus === 'qr' && hasCurrentQr) ||
+        (currentStatus === 'code' && hasCurrentCode)) &&
+      !hasIncomingQr &&
+      !hasIncomingCode;
+
+    if (shouldIgnorePendingRegression) {
+      return payload;
+    }
+
+    // Keep an explicit "connect with code" request pinned to code mode until
+    // a pairing code, final connection, or terminal error arrives.
+    const shouldIgnoreQrRegression =
+      requestedAuthMethod === 'code' &&
+      !isConnected &&
+      !hasIncomingCode &&
+      (incomingAuthMethod === 'qr' || derivedStatus === 'qr' || hasIncomingQr);
+
+    if (shouldIgnoreQrRegression) {
+      updateWhatsappQr('');
+      return payload;
+    }
 
     setWhatsappAuthMode(nextAuthMethod);
-    setWhatsappStatus(derivedStatus);
+    setWhatsappStatusValue(derivedStatus);
     setWhatsappConnected(isConnected);
-    setWhatsappCanReconnect(canReconnect);
     setWhatsappActionStatus('');
 
     if (isConnected) {
       updateWhatsappQr('');
-      setWhatsappPairingCode('');
-      return;
+      updateWhatsappPairingCode('');
+      return payload;
     }
     if (payload?.pairingCode) {
       setWhatsappAuthMode('code');
       updateWhatsappQr('');
-      setWhatsappPairingCode(String(payload.pairingCode));
+      updateWhatsappPairingCode(payload.pairingCode);
       if (payload?.pairingPhoneNumber) {
         setWhatsappPairingPhoneInput(
           normalizePairingPhone(payload.pairingPhoneNumber)
         );
       }
-      return;
+      return payload;
     }
     if (payload?.qrImage && nextAuthMethod !== 'code') {
-      setWhatsappPairingCode('');
+      updateWhatsappPairingCode('');
       updateWhatsappQr(payload.qrImage);
-      return;
+      return payload;
     }
     if (derivedStatus !== 'qr' && derivedStatus !== 'code') {
       updateWhatsappQr('');
-      setWhatsappPairingCode('');
+      updateWhatsappPairingCode('');
     }
-  }, [normalizePairingPhone, setWhatsappAuthMode, updateWhatsappQr, user?.id]);
+    return payload;
+  }, [
+    normalizePairingPhone,
+    setWhatsappAuthMode,
+    setWhatsappStatusValue,
+    updateWhatsappPairingCode,
+    updateWhatsappQr,
+    user?.id,
+  ]);
 
   const fetchWhatsAppApi = useCallback(async (path, options = {}, retry = true) => {
     const response = await fetch(`/api${path}`, {
@@ -877,10 +924,12 @@ export default function SettingsPage() {
       }
       const payload = await response.json();
       if (!isMountedRef.current) return;
-      applyWhatsappStatusPayload(payload);
-      return payload;
+      return applyWhatsappStatusPayload(payload);
     } catch (error) {
-      if (isMountedRef.current) {
+      if (
+        isMountedRef.current &&
+        !['starting', 'qr', 'code', 'connected'].includes(whatsappStatusRef.current)
+      ) {
         markWhatsappDisconnectedUi();
       }
     }
@@ -927,7 +976,7 @@ export default function SettingsPage() {
         socket.on('whatsapp:qr', (payload) => {
           if (!payload) return;
           if (whatsappAuthMethodRef.current === 'code') return;
-          setWhatsappPairingCode('');
+          updateWhatsappPairingCode('');
           if (typeof payload === 'string') {
             updateWhatsappQr(payload);
             return;
@@ -948,10 +997,10 @@ export default function SettingsPage() {
               : String(payload?.code || '').trim();
           if (!code) return;
           setWhatsappAuthMode('code');
-          setWhatsappStatus('code');
+          setWhatsappStatusValue('code');
           setWhatsappConnected(false);
           updateWhatsappQr('');
-          setWhatsappPairingCode(code);
+          updateWhatsappPairingCode(code);
           const incomingPhone =
             typeof payload === 'object' && payload?.phoneNumber
               ? normalizePairingPhone(payload.phoneNumber)
@@ -959,21 +1008,20 @@ export default function SettingsPage() {
           if (incomingPhone) {
             setWhatsappPairingPhoneInput(incomingPhone);
           }
-          setWhatsappCanReconnect(false);
         });
 
         socket.on('connect_error', () => {
           if (!isMountedRef.current || whatsappSocketClosingRef.current) return;
-          markWhatsappDisconnectedUi();
+          fetchWhatsAppStatus(isMountedRef);
         });
 
         socket.on('disconnect', () => {
           if (!isMountedRef.current || whatsappSocketClosingRef.current) return;
-          markWhatsappDisconnectedUi();
+          fetchWhatsAppStatus(isMountedRef);
         });
       } catch (error) {
         if (!isMountedRef.current) return;
-        markWhatsappDisconnectedUi();
+        fetchWhatsAppStatus(isMountedRef);
       }
     })();
 
@@ -987,10 +1035,11 @@ export default function SettingsPage() {
   }, [
     applyWhatsappStatusPayload,
     fetchWhatsAppStatus,
-    markWhatsappDisconnectedUi,
     normalizePairingPhone,
     renderQrFromRaw,
     setWhatsappAuthMode,
+    setWhatsappStatusValue,
+    updateWhatsappPairingCode,
     updateWhatsappQr,
     user?.id,
   ]);
@@ -1000,10 +1049,9 @@ export default function SettingsPage() {
       setWhatsappActionStatus('');
       setWhatsappAuthMode(usePairingCode ? 'code' : 'qr');
       // Optimistic UI: immediately reflect that a connection attempt is in progress.
-      setWhatsappStatus('starting');
+      setWhatsappStatusValue('starting');
       setWhatsappConnected(false);
-      setWhatsappCanReconnect(false);
-      setWhatsappPairingCode('');
+      updateWhatsappPairingCode('');
       updateWhatsappQr('');
       const pairingPhoneNumber = normalizePairingPhone(whatsappPairingPhoneInput);
       if (usePairingCode && (pairingPhoneNumber.length < 8 || pairingPhoneNumber.length > 15)) {
@@ -1027,20 +1075,25 @@ export default function SettingsPage() {
         throw new Error(payload?.error || 'Could not start WhatsApp.');
       }
       if (payload?.pairingCode) {
-        setWhatsappPairingCode(String(payload.pairingCode));
+        updateWhatsappPairingCode(payload.pairingCode);
       } else if (usePairingCode) {
-        setWhatsappPairingCode('');
+        updateWhatsappPairingCode('');
       }
       if (usePairingCode) {
         updateWhatsappQr('');
       }
-      await fetchWhatsAppStatus(settingsMountedRef);
+      let latestPayload = await fetchWhatsAppStatus(settingsMountedRef);
 
       // Some environments block/slow Socket.IO; poll briefly so QR / link-code appears quickly.
       for (let i = 0; i < 8; i += 1) {
+        if (
+          ['connected', 'qr', 'code'].includes(String(latestPayload?.status || ''))
+        ) {
+          break;
+        }
         await new Promise((resolve) => setTimeout(resolve, 800));
         if (!settingsMountedRef.current) break;
-        await fetchWhatsAppStatus(settingsMountedRef);
+        latestPayload = await fetchWhatsAppStatus(settingsMountedRef);
       }
     } catch (error) {
       setWhatsappActionStatus(error.message);
@@ -1059,7 +1112,7 @@ export default function SettingsPage() {
       if (!response.ok) {
         throw new Error(payload?.error || 'Could not disconnect WhatsApp.');
       }
-      setWhatsappPairingCode('');
+      updateWhatsappPairingCode('');
       updateWhatsappQr('');
       await fetchWhatsAppStatus();
     } catch (error) {
@@ -1080,20 +1133,12 @@ export default function SettingsPage() {
     whatsappStatus === 'starting' ||
     whatsappStatus === 'qr' ||
     whatsappStatus === 'code';
-  const showReconnectAction =
+  const showConnectActions =
     (whatsappStatus === 'disconnected' ||
       whatsappStatus === 'idle' ||
       whatsappStatus === 'error' ||
       whatsappStatus === 'auth_failure') &&
-    !whatsappConnected &&
-    whatsappCanReconnect;
-  const showFreshConnectActions =
-    (whatsappStatus === 'disconnected' ||
-      whatsappStatus === 'idle' ||
-      whatsappStatus === 'error' ||
-      whatsappStatus === 'auth_failure') &&
-    !whatsappConnected &&
-    !whatsappCanReconnect;
+    !whatsappConnected;
   const isStartBlocked =
     whatsappConnected ||
     whatsappStatus === 'connected_other' ||
@@ -1139,8 +1184,6 @@ export default function SettingsPage() {
     ? 'Scan the QR code below with WhatsApp to connect.'
     : whatsappStatus === 'code'
     ? 'Use the code below in WhatsApp > Linked Devices > Link with phone number.'
-    : showReconnectAction
-    ? 'Saved WhatsApp login was found for this admin. Click Reconnect to restore the connection.'
     : 'WhatsApp is not connected right now.';
 
   return (
@@ -2116,17 +2159,7 @@ export default function SettingsPage() {
                       </span>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row">
-                      {showReconnectAction ? (
-                        <Button
-                          variant="primary"
-                          onClick={() => handleStartWhatsApp({ usePairingCode: true })}
-                          disabled={isStartBlocked}
-                          className="w-full sm:w-auto"
-                        >
-                          Reconnect
-                        </Button>
-                      ) : null}
-                      {showFreshConnectActions ? (
+                      {showConnectActions ? (
                         <Button
                           variant="primary"
                           onClick={() => handleStartWhatsApp({ usePairingCode: true })}
@@ -2136,7 +2169,7 @@ export default function SettingsPage() {
                           {whatsappStatus === 'starting' ? 'Starting...' : 'Connect with Code'}
                         </Button>
                       ) : null}
-                      {showFreshConnectActions ? (
+                      {showConnectActions ? (
                         <Button
                           variant="outline"
                           onClick={() => handleStartWhatsApp({ usePairingCode: false })}
