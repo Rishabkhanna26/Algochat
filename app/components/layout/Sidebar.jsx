@@ -8,43 +8,25 @@ import {
   faGauge,
   faInbox,
   faUsers,
-  faTowerBroadcast,
-  faFileLines,
   faChartBar,
-  faUserGroup,
   faGear,
-  faCalendarCheck,
-  faHotel,
   faBoxOpen,
-  faCartShopping,
-  faWallet,
   faCreditCard,
-  faClipboardList,
   faChevronLeft,
   faChevronRight,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 import { useAuth } from '../auth/AuthProvider.jsx';
-import { filterMenuItems, isRestrictedModeUser } from '../../../lib/access.js';
-import {
-  getCatalogLabel,
-  hasBookingAccess,
-  hasProductAccess,
-  hasServiceAccess,
-} from '../../../lib/business.js';
+import { isRestrictedModeUser } from '../../../lib/access.js';
+import { getCatalogLabel } from '../../../lib/business.js';
 
 export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClose }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const [inboxCount, setInboxCount] = useState(0);
-  const [typeRequestCount, setTypeRequestCount] = useState(0);
   const restrictedMode = isRestrictedModeUser(user);
 
-  const showServiceOrders = Boolean(user?.id) && hasServiceAccess(user);
-  const showBookings = Boolean(user?.id) && hasBookingAccess(user);
-  const showBooking = Boolean(user?.id) && hasBookingAccess(user);
-  const showOrders = Boolean(user?.id) && hasProductAccess(user);
   const catalogLabel = getCatalogLabel(user);
 
   useEffect(() => {
@@ -83,68 +65,22 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     };
   }, [user?.id, restrictedMode]);
 
-  useEffect(() => {
-    if (!user?.id || restrictedMode || user.admin_tier !== 'super_admin') {
-      setTypeRequestCount(0);
-      return;
-    }
-    let mounted = true;
-
-    const fetchTypeRequestCount = async () => {
-      try {
-        const response = await fetch('/api/admins/business-type-requests?status=pending', {
-          credentials: 'include',
-        });
-        const data = await response.json();
-        if (!mounted) return;
-        if (!response.ok) {
-          setTypeRequestCount(0);
-          return;
-        }
-        const count = Array.isArray(data?.data) ? data.data.length : 0;
-        setTypeRequestCount(Math.max(0, count));
-      } catch (error) {
-        if (mounted) setTypeRequestCount(0);
-      }
-    };
-
-    fetchTypeRequestCount();
-    const handler = () => fetchTypeRequestCount();
-    window.addEventListener('aa-badge-refresh', handler);
-    const timer = setInterval(fetchTypeRequestCount, 30000);
-    return () => {
-      mounted = false;
-      window.removeEventListener('aa-badge-refresh', handler);
-      clearInterval(timer);
-    };
-  }, [user?.id, user?.admin_tier, restrictedMode]);
-
   const menuItems = [
     { name: 'Dashboard', icon: faGauge, path: '/dashboard' },
     { name: 'Inbox', icon: faInbox, path: '/inbox', badge: inboxCount > 0 ? String(inboxCount) : null },
     { name: 'Leads', icon: faUsers, path: '/contacts' },
     { name: catalogLabel, icon: faBoxOpen, path: '/catalog' },
-    ...(showOrders ? [{ name: 'Orders', icon: faCartShopping, path: '/orders' }] : []),
-    ...(showServiceOrders
-      ? [{ name: 'Service Orders', icon: faClipboardList, path: '/appointments?kind=service' }]
-      : []),
-    ...(showOrders ? [{ name: 'Revenue', icon: faWallet, path: '/revenue' }] : []),
-    ...(showBookings ? [{ name: 'Client Bookings', icon: faCalendarCheck, path: '/appointments?kind=booking' }] : []),
-    ...(showBooking ? [{ name: 'Booking Catalog', icon: faHotel, path: '/booking' }] : []),
+    { name: 'Orders', icon: faBoxOpen, path: '/orders' },
+    { name: 'Service Orders', icon: faUsers, path: '/appointments?kind=service' },
+    { name: 'Revenue', icon: faChartBar, path: '/revenue' },
+    { name: 'Client Bookings', icon: faUsers, path: '/appointments?kind=booking' },
+    { name: 'Booking Catalog', icon: faBoxOpen, path: '/booking' },
     { name: 'Reports', icon: faChartBar, path: '/reports' },
+    { name: 'Admins', icon: faUsers, path: '/admins' },
     { name: 'Billing', icon: faCreditCard, path: '/billing' },
-    {
-      name: 'Admins',
-      icon: faUserGroup,
-      path: '/admins',
-      roles: ['super_admin'],
-      badge: typeRequestCount > 0 ? String(typeRequestCount) : null,
-    },
     { name: 'Settings', icon: faGear, path: '/settings' },
-    // { name: 'Broadcast', icon: faTowerBroadcast, path: '/broadcast' },
-    // { name: 'Templates', icon: faFileLines, path: '/templates' },
   ];
-  const visibleItems = filterMenuItems(user, menuItems);
+  const visibleItems = menuItems;
 
   const sectionForItem = (itemName = '') => {
     const name = String(itemName || '').toLowerCase();
@@ -152,7 +88,7 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
     if (name.includes('product') || name.includes('service') || ['orders', 'revenue'].includes(name)) {
       return 'commerce';
     }
-    if (['appointments', 'booking', 'bookings'].includes(name)) return 'schedule';
+    if (name.includes('appointment') || name.includes('booking')) return 'schedule';
     return 'system';
   };
 

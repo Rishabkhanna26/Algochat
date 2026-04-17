@@ -350,12 +350,13 @@ export default function AdminsPage() {
   }
 
   return (
-    <div className="space-y-6" data-testid="admins-page">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-aa-dark-blue mb-2">Admins</h1>
-          <p className="text-aa-gray">Manage your admin members and their roles</p>
+    <div className="aa-page-shell aa-stagger-children" data-testid="admins-page">
+      <div className="aa-page-header">
+        <div className="aa-page-header__body">
+          <h1 className="aa-page-title">Admins</h1>
+          <p className="aa-page-subtitle">Manage your admin members and their roles.</p>
         </div>
+        <div className="aa-page-actions">
         <Button
           variant="primary"
           icon={<FontAwesomeIcon icon={faRotateRight} style={{ fontSize: 18 }} />}
@@ -364,9 +365,10 @@ export default function AdminsPage() {
         >
           Refresh
         </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="aa-stat-grid">
         <Card>
           <h3 className="text-sm font-semibold text-aa-gray mb-2">Total Admins</h3>
           <p className="text-3xl font-bold text-aa-dark-blue">{totalCount}</p>

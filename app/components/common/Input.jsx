@@ -51,7 +51,7 @@ export default function Input({
           onChange={handleChange}
           placeholder={placeholder}
           min={isNumber ? (minProp ?? 0) : minProp}
-          className={`w-full rounded-lg border-2 bg-white px-4 py-2.5 text-sm text-aa-text-dark outline-none placeholder:text-gray-400 focus:border-aa-orange sm:py-3 sm:text-base ${
+          className={`w-full rounded-xl border-2 bg-white px-3.5 py-2.5 text-sm text-aa-text-dark shadow-sm outline-none placeholder:text-gray-400 transition-colors duration-200 focus:border-aa-orange sm:px-4 sm:py-3 sm:text-base ${
             error ? 'border-red-500' : 'border-gray-200'
           } ${hasLeftIcon ? 'pl-10' : ''} ${hasRightElement ? 'pr-12' : ''}`}
           data-testid="input-field"

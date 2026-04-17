@@ -976,15 +976,15 @@ export default function CatalogPage() {
   }
 
   return (
-    <div className="space-y-6" data-testid="catalog-page">
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-aa-dark-blue mb-2">{catalogLabel}</h1>
-          <p className="text-aa-gray">
+    <div className="aa-page-shell aa-stagger-children" data-testid="catalog-page">
+      <div className="aa-page-header">
+        <div className="aa-page-header__body">
+          <h1 className="aa-page-title">{catalogLabel}</h1>
+          <p className="aa-page-subtitle">
             Control exactly what appears in WhatsApp. Hidden items stay out of WhatsApp, and visible items follow your first-message and menu order.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="aa-page-actions">
           <Button
             variant="primary"
             icon={<FontAwesomeIcon icon={faPlus} style={{ fontSize: 16 }} />}
@@ -1015,7 +1015,7 @@ export default function CatalogPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="aa-stat-grid">
         <Card className="p-4">
           <p className="text-xs font-semibold text-aa-gray uppercase mb-1">Total Items</p>
           <p className="text-2xl font-bold text-aa-dark-blue">{stats.total}</p>

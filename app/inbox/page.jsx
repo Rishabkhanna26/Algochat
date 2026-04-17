@@ -723,24 +723,24 @@ export default function InboxPage() {
   return (
     <div
       data-testid="inbox-page"
-      className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-blue-50"
+      className="aa-page-shell aa-stagger-children min-h-screen bg-gradient-to-br from-orange-50 via-white to-blue-50"
     >
-      <div className="mx-auto w-full max-w-[1920px] px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-6 xl:px-8 xl:py-8">
-        <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white/90 p-3 shadow-2xl backdrop-blur-sm sm:rounded-3xl sm:p-4 lg:p-5 xl:p-6">
-          <div className={`${mobileThreadOpen ? 'hidden sm:flex' : 'flex'} flex-col gap-3 sm:gap-4 lg:flex-row lg:items-end lg:justify-between`}>
-            <div className="space-y-2">
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white/90 p-3 shadow-2xl backdrop-blur-sm sm:rounded-3xl sm:p-4 lg:p-5 xl:p-6">
+          <div className={`${mobileThreadOpen ? 'hidden sm:grid' : 'grid'} aa-page-header gap-3 sm:gap-4`}>
+            <div className="aa-page-header__body space-y-2">
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 sm:h-12 sm:w-12 lg:h-14 lg:w-14 lg:rounded-2xl">
                   <FontAwesomeIcon icon={faInbox} className="text-base text-blue-600 sm:text-lg lg:text-xl" />
                 </div>
                 <div>
-                  <h1 className="text-xl font-bold text-gray-900 sm:text-2xl lg:text-3xl">Inbox</h1>
-                  <p className="text-xs text-gray-600 sm:text-sm lg:max-w-2xl">
+                  <h1 className="aa-page-title">Inbox</h1>
+                  <p className="aa-page-subtitle lg:max-w-2xl">
                     Stay on top of customer messages with quick filters and replies.
                   </p>
                 </div>
               </div>
             </div>
+            <div className="aa-page-actions">
             <Button
               variant="outline"
               onClick={() => fetchMessages({ reset: true, nextOffset: 0, searchTerm: search })}
@@ -751,8 +751,9 @@ export default function InboxPage() {
               <span className="sm:hidden">Refresh</span>
             </Button>
           </div>
+          </div>
 
-          <div className={`${mobileThreadOpen ? 'hidden sm:grid' : 'grid'} mt-4 grid-cols-2 gap-2 sm:mt-5 sm:gap-3 lg:mt-6 lg:grid-cols-4 lg:gap-4 xl:gap-5`}>
+          <div className={`${mobileThreadOpen ? 'hidden sm:grid' : 'grid'} aa-stat-grid mt-4 sm:mt-5 lg:mt-6`}>
             <Card
               unstyled
               className="min-h-[100px] rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:min-h-[120px] sm:p-4 lg:min-h-[140px] lg:p-5"
@@ -1456,7 +1457,6 @@ export default function InboxPage() {
               )}
             </Card>
           )}
-        </div>
       </div>
     </div>
   );

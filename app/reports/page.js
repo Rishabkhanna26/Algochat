@@ -153,14 +153,14 @@ export default function ReportsPage() {
   }[dateRange] || 'Last 7 days';
 
   return (
-    <div className="space-y-6" data-testid="reports-page">
+    <div className="aa-page-shell aa-stagger-children" data-testid="reports-page">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-aa-dark-blue mb-2">Reports & Analytics</h1>
-          <p className="text-aa-gray">Track your business performance and insights</p>
+      <div className="aa-page-header">
+        <div className="aa-page-header__body">
+          <h1 className="aa-page-title">Reports & Analytics</h1>
+          <p className="aa-page-subtitle">Track your business performance and insights with cleaner cards and better chart spacing on smaller screens.</p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center w-full sm:w-auto">
+        <div className="aa-page-actions w-full sm:w-auto">
           <GeminiSelect
             label="Date Range"
             value={dateRange}
@@ -213,7 +213,7 @@ export default function ReportsPage() {
       ) : null}
 
       {/* Overview Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="aa-stat-grid">
         <Card>
           <div className="flex items-center justify-between">
             <div>

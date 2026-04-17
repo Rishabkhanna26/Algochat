@@ -6,14 +6,14 @@ import { faChevronDown } from '@fortawesome/free-solid-svg-icons';
 
 const SIZE_STYLES = {
   sm: {
-    warmButton: 'rounded-xl px-4 py-2.5 text-sm',
-    vibrantButton: 'rounded-2xl px-4 py-3 text-sm',
-    option: 'px-4 py-3 text-sm',
+    warmButton: 'rounded-xl px-3.5 py-2.5 text-sm',
+    vibrantButton: 'rounded-2xl px-3.5 py-2.5 text-sm',
+    option: 'px-3.5 py-2.5 text-sm',
   },
   md: {
-    warmButton: 'rounded-xl px-4 py-3 text-sm',
-    vibrantButton: 'rounded-2xl px-5 py-4 text-sm',
-    option: 'px-5 py-4 text-sm',
+    warmButton: 'rounded-xl px-4 py-2.5 text-sm sm:py-3',
+    vibrantButton: 'rounded-2xl px-4 py-3 text-sm sm:px-5 sm:py-3.5',
+    option: 'px-4 py-3 text-sm sm:px-5 sm:py-3.5',
   },
 };
 

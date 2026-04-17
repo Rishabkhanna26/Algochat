@@ -348,7 +348,7 @@ export default function LoginPage() {
           </div>
         </aside>
 
-        <section className="relative flex flex-1 items-center justify-center px-5 py-8 sm:px-8 lg:w-1/2 lg:flex-none lg:px-12">
+        <section className="relative flex flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-8 lg:w-1/2 lg:flex-none lg:px-12">
           <div className="aa-auth-decor pointer-events-none absolute inset-0">
             <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'linear-gradient(rgb(148 163 184 / 0.35) 1px, transparent 1px), linear-gradient(90deg, rgb(148 163 184 / 0.35) 1px, transparent 1px)', backgroundSize: '56px 56px' }} />
             <div className="absolute right-16 top-20 h-16 w-16 rounded-2xl border border-aa-orange/20 bg-white/40 backdrop-blur-md aa-auth-float" />
@@ -367,8 +367,8 @@ export default function LoginPage() {
           </div>
 
           <div className="relative z-10 w-full max-w-xl">
-            <div className="mb-7 flex justify-center lg:hidden aa-auth-reveal-up" style={{ animationDelay: '140ms' }}>
-              <div className="rounded-2xl border border-white/70 bg-white/90 p-2.5 shadow-[0_14px_34px_rgba(15,23,42,0.2)]">
+            <div className="mb-5 flex justify-center lg:hidden aa-auth-reveal-up sm:mb-7" style={{ animationDelay: '140ms' }}>
+              <div className="rounded-2xl border border-white/70 bg-white/90 p-2 shadow-[0_14px_34px_rgba(15,23,42,0.2)] sm:p-2.5">
                 <Image
                   src="/algoaura_logo.png"
                   alt="AlgoChat"
@@ -380,7 +380,7 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="aa-auth-card rounded-3xl border border-white/80 bg-white/90 p-10 shadow-[0_30px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-12 aa-auth-card-reveal">
+            <div className="aa-auth-card rounded-[1.75rem] border border-white/80 bg-white/90 p-5 shadow-[0_30px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-8 lg:p-10 aa-auth-card-reveal">
               <div
                 className="mb-8 rounded-2xl border border-[#ffd8b0] bg-gradient-to-r from-[#fff7ee] via-[#fffaf5] to-white p-4 aa-auth-reveal-up sm:p-5"
                 style={{ animationDelay: '120ms' }}
@@ -451,7 +451,7 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="mt-1 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-base font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
+                    className="mt-1 flex h-12 sm:h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] px-4 text-sm sm:text-base font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
                     style={{ animationDelay: '360ms' }}
                   >
                     <FontAwesomeIcon icon={faRightToBracket} />
@@ -474,7 +474,7 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={twoFactorLoading}
-                    className="mt-1 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-base font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60"
+                    className="mt-1 flex h-12 sm:h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] px-4 text-sm sm:text-base font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60"
                   >
                     <FontAwesomeIcon icon={faRightToBracket} />
                     {twoFactorLoading ? 'Verifying...' : 'Verify & Login'}
@@ -539,7 +539,7 @@ export default function LoginPage() {
                 onClick={() => {
                   window.location.href = '/api/auth/google/start';
                 }}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-base font-medium text-slate-700 transition hover:bg-slate-50 aa-auth-reveal-up"
+                className="flex h-12 sm:h-14 w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm sm:text-base font-medium text-slate-700 transition hover:bg-slate-50 aa-auth-reveal-up"
                 style={{ animationDelay: '470ms' }}
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -599,7 +599,7 @@ export default function LoginPage() {
           {forgotError && (
             <p className="text-sm text-red-600">{forgotError}</p>
           )}
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <Button type="submit" variant="primary" className="flex-1" disabled={forgotLoading}>
               {forgotLoading ? 'Sending...' : 'Send Temporary Password'}
             </Button>
@@ -648,7 +648,7 @@ export default function LoginPage() {
           />
           {resetError && <p className="text-sm text-red-600">{resetError}</p>}
           {resetSuccess && <p className="text-sm text-green-600">{resetSuccess}</p>}
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <Button type="submit" variant="primary" className="flex-1" disabled={resetLoading}>
               {resetLoading ? 'Saving...' : 'Save New Password'}
             </Button>
@@ -670,7 +670,7 @@ export default function LoginPage() {
 function AuthField({ label, icon, rightElement, ...props }) {
   return (
     <div>
-      <label className="mb-2 block text-base font-semibold text-slate-700">{label}</label>
+      <label className="mb-2 block text-sm sm:text-base font-semibold text-slate-700">{label}</label>
       <div className="relative">
         <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
           {icon}
@@ -678,7 +678,7 @@ function AuthField({ label, icon, rightElement, ...props }) {
         <input
           {...props}
           required
-          className="h-14 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-12 text-base text-slate-900 outline-none transition focus:border-aa-orange focus:ring-2 focus:ring-orange-100"
+          className="h-12 sm:h-14 w-full rounded-2xl border border-slate-200 bg-white pl-11 pr-12 text-sm sm:text-base text-slate-900 outline-none transition focus:border-aa-orange focus:ring-2 focus:ring-orange-100"
         />
         {rightElement && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2">

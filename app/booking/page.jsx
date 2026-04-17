@@ -437,7 +437,7 @@ export default function BookingPage() {
   }
 
   return (
-    <div className="space-y-6" data-testid="booking-page">
+    <div className="aa-page-shell aa-stagger-children" data-testid="booking-page">
       <Card className="overflow-hidden border-none bg-gradient-to-br from-white via-[#fff7ef] to-[#ffe6cf] shadow-lg">
         <div className="grid gap-6 p-6 sm:p-8 lg:grid-cols-[1.6fr_1fr] lg:items-center">
           <div>

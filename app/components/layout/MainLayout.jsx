@@ -142,7 +142,8 @@ export default function MainLayout({ children }) {
             <Navbar onMenuClick={() => setSidebarOpen(true)} />
           </div>
           <div className="h-16 shrink-0 sm:h-[4.5rem]" aria-hidden="true" />
-          <main className="min-w-0 flex-1 p-3 sm:p-4 lg:p-6">
+          <main className="min-w-0 flex-1 px-2.5 pb-4 pt-2 sm:px-4 sm:pb-6 sm:pt-3 lg:px-6 lg:pb-8 lg:pt-4">
+            <div className="mx-auto w-full max-w-[1780px]">
             {restrictedMode && (
               <div className="mb-4 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -161,6 +162,7 @@ export default function MainLayout({ children }) {
             )}
             <div className={`min-w-0 ${restrictedMode && !isBillingPath ? 'aa-restricted-readonly' : ''}`}>
               {children}
+            </div>
             </div>
           </main>
         </div>

@@ -310,13 +310,16 @@ export default function ContactsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 flex items-center gap-2">
+    <div className="aa-page-shell aa-stagger-children" data-testid="contacts-page">
+      <div className="aa-page-header">
+        <div className="aa-page-header__body">
+        <h1 className="aa-page-title mb-4 flex items-center gap-2">
           <FontAwesomeIcon icon={faUsers} className="text-aa-orange" style={{ fontSize: 32 }} />
           Leads
         </h1>
-        
+        <p className="aa-page-subtitle">Review leads, search quickly, and jump straight into the conversation.</p>
+        </div>
+        <div className="aa-page-actions">
         <div className="relative">
           <FontAwesomeIcon
             icon={faMagnifyingGlass}
@@ -331,9 +334,10 @@ export default function ContactsPage() {
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
           />
         </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {filteredUsers.length === 0 ? (
           <div className="col-span-full text-center py-12 bg-gray-50 rounded-lg">
             <FontAwesomeIcon icon={faUsers} className="mx-auto text-gray-400 mb-2" style={{ fontSize: 48 }} />

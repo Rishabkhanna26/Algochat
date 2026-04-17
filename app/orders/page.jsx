@@ -988,13 +988,13 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="space-y-6" data-testid="orders-page">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-aa-dark-blue mb-2">Orders</h1>
-          <p className="text-aa-gray">Track and manage WhatsApp orders end-to-end.</p>
+    <div className="aa-page-shell aa-stagger-children" data-testid="orders-page">
+      <div className="aa-page-header">
+        <div className="aa-page-header__body">
+          <h1 className="aa-page-title">Orders</h1>
+          <p className="aa-page-subtitle">Track and manage WhatsApp orders end to end with a cleaner card-first layout on smaller screens.</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="aa-page-actions">
           <Button variant="primary" onClick={openCreate} className="w-full sm:w-auto">
             <span className="inline-flex items-center gap-2">
               <FontAwesomeIcon icon={faPlus} />
@@ -1010,7 +1010,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="aa-stat-grid">
         <Card className="p-4">
           <div className="flex items-center justify-between">
             <div>

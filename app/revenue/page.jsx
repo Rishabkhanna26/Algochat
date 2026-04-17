@@ -175,11 +175,11 @@ export default function RevenuePage() {
   }
 
   return (
-    <div data-testid="revenue-page" className="revenue-page space-y-6 p-4 sm:p-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Revenue Management</h1>
-          <p className="text-gray-600">All WhatsApp revenue data in one dedicated section.</p>
+    <div data-testid="revenue-page" className="aa-page-shell aa-stagger-children revenue-page">
+      <div className="aa-page-header">
+        <div className="aa-page-header__body">
+          <h1 className="aa-page-title">Revenue Management</h1>
+          <p className="aa-page-subtitle">All WhatsApp revenue data in one place, arranged as tighter mobile cards and easier chart sections.</p>
         </div>
         <div
           className={`revenue-trend-pill inline-flex items-center gap-2 self-start rounded-full px-3 py-1 text-sm font-semibold revenue-trend-pill--${trendDirection === 'up' ? 'up' : trendDirection === 'down' ? 'down' : 'flat'}`}
@@ -201,7 +201,7 @@ export default function RevenuePage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="aa-stat-grid">
         <div className="revenue-summary-card revenue-summary-card--earned rounded-lg border p-4 shadow-sm">
           <div className="mb-2 flex items-center justify-between">
             <p className="revenue-summary-label text-xs font-semibold uppercase tracking-wide">Earned (Collected)</p>
@@ -263,7 +263,7 @@ export default function RevenuePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         <div className="revenue-shell-card xl:col-span-2 rounded-lg border p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-gray-900 mb-3">
             Revenue Trend (Last {Math.max(revenueTrendData.length, 1)} days)

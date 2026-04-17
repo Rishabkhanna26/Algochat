@@ -69,30 +69,6 @@ const LEAD_STATUS_COLORS = {
 	completed: '#34C77A',
 };
 
-const formatHourOptionLabel = (hour, { isEnd = false } = {}) => {
-	const normalizedHour = hour % 24;
-	const period = normalizedHour >= 12 ? 'PM' : 'AM';
-	const hour12 = normalizedHour % 12 || 12;
-	const label = `${hour12}:00 ${period}`;
-	if (isEnd && hour === 24) {
-		return `${label} (next day)`;
-	}
-	return label;
-};
-
-const START_HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
-	value: hour,
-	label: formatHourOptionLabel(hour),
-}));
-
-const END_HOUR_OPTIONS = Array.from({ length: 24 }, (_, index) => {
-	const hour = index + 1;
-	return {
-		value: hour,
-		label: formatHourOptionLabel(hour, { isEnd: true }),
-	};
-});
-
 export default function DashboardPage() {
 	const router = useRouter();
 	const { user } = useAuth();
@@ -475,11 +451,13 @@ export default function DashboardPage() {
     : 'Manage access in Billing or update the plan to stay active.';
 
 	return (
-		<div className="p-4 sm:p-6 space-y-6">
+		<div className="aa-page-shell aa-stagger-children" data-testid="dashboard-page">
 			{/* Header */}
-			<div>
-				<h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Dashboard</h1>
-				<p className="text-gray-600 mt-2">Welcome back! Here&apos;s your business overview.</p>
+			<div className="aa-page-header">
+        <div className="aa-page-header__body">
+				<h1 className="aa-page-title">Dashboard</h1>
+				<p className="aa-page-subtitle">Welcome back. This mobile-first layout keeps key actions, metrics, and automation controls readable on phones and tablets.</p>
+        </div>
 			</div>
       {subscriptionExpired && (
         <SubscriptionExpiredBanner 
@@ -494,7 +472,7 @@ export default function DashboardPage() {
       )}
 
 				{/* Quick Actions */}
-				<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+				<div className="aa-stat-grid">
 	        <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition">
 	          <div className="flex items-start justify-between gap-4">
 	            <div>
@@ -594,7 +572,7 @@ export default function DashboardPage() {
 			</div>
 
 			{/* Stats Grid */}
-			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+			<div className="aa-stat-grid">
 				<div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition">
 					<div className="flex items-center justify-between">
 						<div>
@@ -840,7 +818,7 @@ export default function DashboardPage() {
 				<div id="auto-reply-settings" className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
 					<h2 className="text-xl font-bold text-gray-900 mb-2">WhatsApp Auto-reply Settings</h2>
 					<p className="text-gray-600 mb-6">
-						Control when auto replies start, what they can say, and booking availability.
+						Control when auto replies start, what they can say, and how unread chats recover.
 					</p>
         {restrictedMode && (
           <p className="text-xs text-amber-700 mb-4">
@@ -854,7 +832,7 @@ export default function DashboardPage() {
 	          disabled={restrictedMode}
 	          className={restrictedMode ? 'opacity-60' : undefined}
 	        >
-					<div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+					<div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
 						<div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
 							<p className="text-[11px] uppercase tracking-wide text-gray-500">Auto Replies</p>
 							<p className="text-sm font-semibold text-gray-900">
@@ -867,13 +845,6 @@ export default function DashboardPage() {
 								{aiSettings.automation_trigger_mode === 'keyword'
 									? 'Keyword based'
 									: 'Any incoming message'}
-							</p>
-						</div>
-						<div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-							<p className="text-[11px] uppercase tracking-wide text-gray-500">Booking Window</p>
-							<p className="text-sm font-semibold text-gray-900">
-								{formatHourOptionLabel(aiSettings.appointment_start_hour)} to{' '}
-								{formatHourOptionLabel(aiSettings.appointment_end_hour, { isEnd: true })}
 							</p>
 						</div>
 					</div>
@@ -896,7 +867,7 @@ export default function DashboardPage() {
 					<div className="rounded-lg border border-gray-200 p-4 mb-4">
 						<h3 className="text-sm font-semibold text-gray-900 mb-1">When should replies start?</h3>
 						<p className="text-xs text-gray-500 mb-4">
-							Choose whether replies start for every message or only after a keyword.
+							Choose whether replies start for every message or only after an exact keyword or line.
 						</p>
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 							<div>
@@ -920,7 +891,7 @@ export default function DashboardPage() {
 						</div>
 							<div>
 								<label className="block text-xs font-semibold text-gray-700 mb-1">
-									Start keyword (only for keyword mode)
+									Start keyword or line (only for keyword mode)
 								</label>
 							<input
 								value={aiSettings.automation_trigger_keyword}
@@ -935,7 +906,7 @@ export default function DashboardPage() {
 								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange disabled:opacity-60"
 							/>
 								<p className="text-xs text-gray-500 mt-2">
-									Example: user sends <span className="font-semibold">START</span>, then auto replies begin.
+									Auto replies start only when the incoming message exactly matches this value. Example: <span className="font-semibold">START</span>.
 								</p>
 							</div>
 						</div>
@@ -983,89 +954,6 @@ export default function DashboardPage() {
 							placeholder="E.g. medical advice, legal advice, personal data, payment links."
 							className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
 						/>
-					</div>
-					</div>
-					<div className="rounded-lg border border-gray-200 p-4 mb-4">
-						<h3 className="text-sm font-semibold text-gray-900 mb-1">Business & Booking Hours</h3>
-						<p className="text-xs text-gray-500 mb-4">
-							Set opening/closing time and booking slot settings.
-						</p>
-							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-								<div>
-									<label className="block text-xs font-semibold text-gray-700 mb-1">
-										Opening Time
-									</label>
-								<select
-									value={aiSettings.appointment_start_hour}
-									onChange={(e) => {
-										const next = Number.parseInt(e.target.value, 10);
-										if (!Number.isFinite(next)) return;
-										setAiSettings((prev) => ({ ...prev, appointment_start_hour: next }));
-									}}
-									className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
-								>
-									{START_HOUR_OPTIONS.map((option) => (
-										<option key={`start-${option.value}`} value={option.value}>
-											{option.label}
-										</option>
-									))}
-								</select>
-							</div>
-								<div>
-									<label className="block text-xs font-semibold text-gray-700 mb-1">
-										Closing Time
-									</label>
-								<select
-									value={aiSettings.appointment_end_hour}
-									onChange={(e) => {
-										const next = Number.parseInt(e.target.value, 10);
-										if (!Number.isFinite(next)) return;
-										setAiSettings((prev) => ({ ...prev, appointment_end_hour: next }));
-									}}
-									className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
-								>
-									{END_HOUR_OPTIONS.map((option) => (
-										<option key={`end-${option.value}`} value={option.value}>
-											{option.label}
-										</option>
-									))}
-								</select>
-							</div>
-							<div>
-								<label className="block text-xs font-semibold text-gray-700 mb-1">
-									Slot Length (minutes)
-								</label>
-							<input
-								type="number"
-								min="15"
-								max="240"
-								step="5"
-								value={aiSettings.appointment_slot_minutes}
-								onChange={(e) => {
-									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next) || next < 0) return;
-									setAiSettings((prev) => ({ ...prev, appointment_slot_minutes: next }));
-								}}
-								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
-							/>
-						</div>
-							<div>
-								<label className="block text-xs font-semibold text-gray-700 mb-1">
-									Advance Booking (months)
-								</label>
-							<input
-								type="number"
-								min="1"
-								max="24"
-								value={aiSettings.appointment_window_months}
-								onChange={(e) => {
-									const next = Number.parseInt(e.target.value, 10);
-									if (!Number.isFinite(next) || next < 0) return;
-									setAiSettings((prev) => ({ ...prev, appointment_window_months: next }));
-								}}
-								className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-aa-orange"
-							/>
-						</div>
 					</div>
 					</div>
 					<div className="rounded-lg border border-gray-200 p-4 mb-4">

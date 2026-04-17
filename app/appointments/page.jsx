@@ -1097,10 +1097,10 @@ export default function AppointmentsPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className={headerWrapperClass}>
+    <div className="aa-page-shell aa-stagger-children" data-testid="appointments-page">
+      <div className={`${headerWrapperClass} aa-page-header`}>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className={`text-2xl sm:text-3xl font-bold flex items-center gap-2 ${headerTitleClass}`}>
+          <h1 className={`aa-page-title flex items-center gap-2 ${headerTitleClass}`}>
             <FontAwesomeIcon icon={headerIcon} className={headerIconClass} style={{ fontSize: 32 }} />
             {label}
           </h1>
@@ -1109,7 +1109,7 @@ export default function AppointmentsPage() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div className="aa-stat-grid mb-4">
           {statusCards.map((item) => (
             <div key={item.key} className={`${statusCardClass} px-4 py-3`}>
               <p className="text-xs uppercase text-aa-gray font-semibold">{item.label}</p>

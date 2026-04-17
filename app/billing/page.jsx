@@ -677,16 +677,18 @@ export default function BillingPage() {
   const renewalTotalDue = Number((renewalSubtotal + renewalMaintenanceFee).toFixed(2));
 
   return (
-    <div className="space-y-6 p-4 sm:p-6">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-aa-dark-blue">
+    <div className="aa-page-shell aa-stagger-children" data-testid="billing-page">
+      <div className="aa-page-header">
+        <div className="aa-page-header__body">
+        <h1 className="aa-page-title">
           {canUseTokenSystem ? 'Billing & Tokens' : 'Billing'}
         </h1>
-        <p className="text-aa-gray mt-1">
+        <p className="aa-page-subtitle">
           {canUseTokenSystem
             ? 'Manage free tokens, prepaid top-ups, and pay-as-you-go charges.'
             : 'Your token system is disabled. Dashboard access controls remain available.'}
         </p>
+        </div>
       </div>
 
       {error && (

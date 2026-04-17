@@ -354,7 +354,7 @@ export default function SignupPage() {
           </div>
         </aside>
 
-        <section className="relative flex flex-1 items-center justify-center px-5 py-8 sm:px-8 lg:w-1/2 lg:flex-none lg:px-12">
+        <section className="relative flex flex-1 items-center justify-center px-4 py-6 sm:px-6 sm:py-8 lg:w-1/2 lg:flex-none lg:px-12">
           <div className="aa-auth-decor pointer-events-none absolute inset-0">
             <div className="absolute inset-0 opacity-[0.06]" style={{ backgroundImage: 'linear-gradient(rgb(148 163 184 / 0.35) 1px, transparent 1px), linear-gradient(90deg, rgb(148 163 184 / 0.35) 1px, transparent 1px)', backgroundSize: '56px 56px' }} />
             <div className="absolute left-10 top-24 h-12 w-12 rounded-full border border-aa-dark-blue/20 bg-white/35 backdrop-blur-md aa-auth-float" />
@@ -373,8 +373,8 @@ export default function SignupPage() {
           </div>
 
           <div className="relative z-10 w-full max-w-2xl">
-            <div className="mb-7 flex justify-center lg:hidden aa-auth-reveal-up" style={{ animationDelay: '140ms' }}>
-              <div className="rounded-2xl border border-white/70 bg-white/90 p-2.5 shadow-[0_14px_34px_rgba(15,23,42,0.2)]">
+            <div className="mb-5 flex justify-center lg:hidden aa-auth-reveal-up sm:mb-7" style={{ animationDelay: '140ms' }}>
+              <div className="rounded-2xl border border-white/70 bg-white/90 p-2 shadow-[0_14px_34px_rgba(15,23,42,0.2)] sm:p-2.5">
                 <Image
                   src="/algoaura_logo.png"
                   alt="AlgoChat"
@@ -386,7 +386,7 @@ export default function SignupPage() {
               </div>
             </div>
 
-            <div className="aa-auth-card rounded-3xl border border-white/80 bg-white/90 p-8 shadow-[0_30px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-9 aa-auth-card-reveal">
+            <div className="aa-auth-card rounded-[1.75rem] border border-white/80 bg-white/90 p-5 shadow-[0_30px_70px_rgba(15,23,42,0.12)] backdrop-blur-xl sm:p-7 lg:p-8 aa-auth-card-reveal">
               <div
                 className="mb-6 rounded-2xl border border-[#ffd8b0] bg-gradient-to-r from-[#fff7ee] via-[#fffaf5] to-white p-4 aa-auth-reveal-up sm:p-5"
                 style={{ animationDelay: '120ms' }}
@@ -550,7 +550,7 @@ export default function SignupPage() {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-sm font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
+                      className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] px-4 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
                       style={{ animationDelay: '540ms' }}
                     >
                       <FontAwesomeIcon icon={faUserPlus} />
@@ -569,7 +569,7 @@ export default function SignupPage() {
                     onClick={() => {
                       window.location.href = '/api/auth/google/start';
                     }}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 transition hover:bg-slate-50 aa-auth-reveal-up"
+                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 aa-auth-reveal-up"
                     style={{ animationDelay: '640ms' }}
                   >
                     <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -600,12 +600,12 @@ export default function SignupPage() {
                     />
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={verifyLoading}
-                    className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] text-sm font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
-                    style={{ animationDelay: '360ms' }}
-                  >
+                    <button
+                      type="submit"
+                      disabled={verifyLoading}
+                      className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#ff6b00] to-[#0f4a9e] px-4 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(15,74,158,0.28)] transition hover:opacity-95 disabled:opacity-60 aa-auth-reveal-up"
+                      style={{ animationDelay: '360ms' }}
+                    >
                     <FontAwesomeIcon icon={faUserPlus} />
                     {verifyLoading ? 'Verifying...' : 'Verify Code & Create Account'}
                   </button>

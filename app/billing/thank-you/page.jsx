@@ -120,17 +120,15 @@ export default function BillingThankYouPage() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          router.push('/billing');
-          return 0;
-        }
-        return prev - 1;
-      });
+      setCountdown((prev) => Math.max(prev - 1, 0));
     }, 1000);
     return () => clearInterval(interval);
-  }, [router]);
+  }, []);
+
+  useEffect(() => {
+    if (countdown !== 0) return;
+    router.push('/billing');
+  }, [countdown, router]);
 
   useEffect(() => {
     if (!linkId) return;

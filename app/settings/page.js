@@ -116,6 +116,30 @@ const BUSINESS_HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
   label: formatHourAmPm(hour),
 }));
 
+const formatBookingHourLabel = (hour, { isEnd = false } = {}) => {
+  const normalizedHour = hour % 24;
+  const period = normalizedHour >= 12 ? 'PM' : 'AM';
+  const hour12 = normalizedHour % 12 || 12;
+  const label = `${hour12}:00 ${period}`;
+  if (isEnd && hour === 24) {
+    return `${label} (next day)`;
+  }
+  return label;
+};
+
+const BOOKING_START_OPTIONS = Array.from({ length: 24 }, (_, hour) => ({
+  value: hour,
+  label: formatBookingHourLabel(hour),
+}));
+
+const BOOKING_END_OPTIONS = Array.from({ length: 24 }, (_, index) => {
+  const hour = index + 1;
+  return {
+    value: hour,
+    label: formatBookingHourLabel(hour, { isEnd: true }),
+  };
+});
+
 const normalizeFreeDeliveryProductRules = (rules) => {
   if (!Array.isArray(rules)) return [];
   const seen = new Set();
@@ -184,6 +208,10 @@ export default function SettingsPage() {
     free_delivery_min_amount: '',
     free_delivery_scope: 'combined',
     free_delivery_product_rules: [],
+    appointment_start_hour: 9,
+    appointment_end_hour: 20,
+    appointment_slot_minutes: 60,
+    appointment_window_months: 3,
   });
   const [profilePhoto, setProfilePhoto] = useState(null);
   const [profilePhotoPreview, setProfilePhotoPreview] = useState(null);
@@ -770,6 +798,22 @@ export default function SettingsPage() {
         free_delivery_product_rules: normalizeFreeDeliveryProductRules(
           user.free_delivery_product_rules || prev.free_delivery_product_rules
         ),
+        appointment_start_hour:
+          Number.isInteger(user.appointment_start_hour)
+            ? user.appointment_start_hour
+            : prev.appointment_start_hour,
+        appointment_end_hour:
+          Number.isInteger(user.appointment_end_hour)
+            ? user.appointment_end_hour
+            : prev.appointment_end_hour,
+        appointment_slot_minutes:
+          Number.isInteger(user.appointment_slot_minutes)
+            ? user.appointment_slot_minutes
+            : prev.appointment_slot_minutes,
+        appointment_window_months:
+          Number.isInteger(user.appointment_window_months)
+            ? user.appointment_window_months
+            : prev.appointment_window_months,
       }));
     }
   }, [user]);
@@ -806,6 +850,18 @@ export default function SettingsPage() {
           free_delivery_product_rules: normalizeFreeDeliveryProductRules(
             data.data?.free_delivery_product_rules
           ),
+          appointment_start_hour: Number.isInteger(data.data?.appointment_start_hour)
+            ? data.data.appointment_start_hour
+            : 9,
+          appointment_end_hour: Number.isInteger(data.data?.appointment_end_hour)
+            ? data.data.appointment_end_hour
+            : 20,
+          appointment_slot_minutes: Number.isInteger(data.data?.appointment_slot_minutes)
+            ? data.data.appointment_slot_minutes
+            : 60,
+          appointment_window_months: Number.isInteger(data.data?.appointment_window_months)
+            ? data.data.appointment_window_months
+            : 3,
         });
         setWhatsappAutoReconnectEnabled(Boolean(data.data?.whatsapp_auto_reconnect));
         setProfilePhotoPreview(data.data?.profile_photo_url || null);
@@ -1338,16 +1394,15 @@ export default function SettingsPage() {
 
   return (
     <div
-      className="space-y-6 rounded-3xl border border-white/60 bg-[radial-gradient(circle_at_top_right,_#fff4ea_0%,_#ffffff_42%,_#eef4ff_100%)] p-4 sm:p-6"
+      className="aa-page-shell aa-stagger-children space-y-6 rounded-3xl border border-white/60 bg-[radial-gradient(circle_at_top_right,_#fff4ea_0%,_#ffffff_42%,_#eef4ff_100%)] p-4 sm:p-6"
       data-testid="settings-page"
     >
-      <Card className="border border-white/70 bg-white/85 backdrop-blur">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-aa-dark-blue">Settings</h1>
-            <p className="text-aa-gray mt-2">Manage your account and preferences from one place.</p>
+      <Card className="aa-page-header border border-white/70 bg-white/85 backdrop-blur">
+        <div className="aa-page-header__body">
+            <h1 className="aa-page-title">Settings</h1>
+            <p className="aa-page-subtitle">Manage your account and preferences from one place with cleaner panels for phones and tablets.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="aa-page-actions flex flex-wrap items-center gap-2">
             <Badge
               variant={
                 whatsappTone === 'green'
@@ -1361,7 +1416,6 @@ export default function SettingsPage() {
             </Badge>
             <Badge variant="blue">Current: {activeTabMeta.name}</Badge>
           </div>
-        </div>
       </Card>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -1803,6 +1857,71 @@ export default function SettingsPage() {
                           Saved format: {profile.business_hours || '10 AM - 7 PM'}
                         </p>
                       </div>
+                      <div className="md:col-span-2 rounded-2xl border border-aa-orange/20 bg-[#fff8f1] p-4 sm:p-5">
+                        <p className="text-sm font-semibold text-aa-text-dark">Booking Settings</p>
+                        <p className="mt-1 text-xs text-aa-gray">
+                          Set the bookable time window and slot rules for appointments and bookings.
+                        </p>
+                        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                          <GeminiSelect
+                            label="Booking Start Time"
+                            value={profile.appointment_start_hour}
+                            onChange={(value) => {
+                              const next = Number(value);
+                              if (!Number.isFinite(next)) return;
+                              setProfile((prev) => ({ ...prev, appointment_start_hour: next }));
+                            }}
+                            options={BOOKING_START_OPTIONS}
+                            variant="vibrant"
+                            size="sm"
+                          />
+                          <GeminiSelect
+                            label="Booking End Time"
+                            value={profile.appointment_end_hour}
+                            onChange={(value) => {
+                              const next = Number(value);
+                              if (!Number.isFinite(next)) return;
+                              setProfile((prev) => ({ ...prev, appointment_end_hour: next }));
+                            }}
+                            options={BOOKING_END_OPTIONS}
+                            variant="vibrant"
+                            size="sm"
+                          />
+                          <Input
+                            label="Slot Length (minutes)"
+                            type="number"
+                            min="15"
+                            max="240"
+                            step="5"
+                            value={profile.appointment_slot_minutes}
+                            onChange={(event) => {
+                              const next = Number.parseInt(event.target.value, 10);
+                              if (!Number.isFinite(next) && event.target.value !== '') return;
+                              setProfile((prev) => ({
+                                ...prev,
+                                appointment_slot_minutes: event.target.value === '' ? '' : next,
+                              }));
+                            }}
+                            placeholder="60"
+                          />
+                          <Input
+                            label="Advance Booking (months)"
+                            type="number"
+                            min="1"
+                            max="24"
+                            value={profile.appointment_window_months}
+                            onChange={(event) => {
+                              const next = Number.parseInt(event.target.value, 10);
+                              if (!Number.isFinite(next) && event.target.value !== '') return;
+                              setProfile((prev) => ({
+                                ...prev,
+                                appointment_window_months: event.target.value === '' ? '' : next,
+                              }));
+                            }}
+                            placeholder="3"
+                          />
+                        </div>
+                      </div>
                       <Input
                         label="Map URL"
                         value={profile.business_map_url}
@@ -2029,6 +2148,18 @@ export default function SettingsPage() {
                             free_delivery_product_rules: normalizeFreeDeliveryProductRules(
                               data.data?.free_delivery_product_rules
                             ),
+                            appointment_start_hour: Number.isInteger(data.data?.appointment_start_hour)
+                              ? data.data.appointment_start_hour
+                              : 9,
+                            appointment_end_hour: Number.isInteger(data.data?.appointment_end_hour)
+                              ? data.data.appointment_end_hour
+                              : 20,
+                            appointment_slot_minutes: Number.isInteger(data.data?.appointment_slot_minutes)
+                              ? data.data.appointment_slot_minutes
+                              : 60,
+                            appointment_window_months: Number.isInteger(data.data?.appointment_window_months)
+                              ? data.data.appointment_window_months
+                              : 3,
                           });
                           setWhatsappAutoReconnectEnabled(
                             Boolean(data.data?.whatsapp_auto_reconnect)
@@ -2078,6 +2209,27 @@ export default function SettingsPage() {
                           ) {
                             throw new Error('Add at least one product rule for free delivery.');
                           }
+                          if (
+                            !Number.isFinite(Number(profile.appointment_start_hour)) ||
+                            !Number.isFinite(Number(profile.appointment_end_hour)) ||
+                            Number(profile.appointment_end_hour) <= Number(profile.appointment_start_hour)
+                          ) {
+                            throw new Error('Booking end time must be greater than booking start time.');
+                          }
+                          if (
+                            !Number.isFinite(Number(profile.appointment_slot_minutes)) ||
+                            Number(profile.appointment_slot_minutes) < 15 ||
+                            Number(profile.appointment_slot_minutes) > 240
+                          ) {
+                            throw new Error('Slot length must be between 15 and 240 minutes.');
+                          }
+                          if (
+                            !Number.isFinite(Number(profile.appointment_window_months)) ||
+                            Number(profile.appointment_window_months) < 1 ||
+                            Number(profile.appointment_window_months) > 24
+                          ) {
+                            throw new Error('Advance booking must be between 1 and 24 months.');
+                          }
                           const response = await fetch('/api/profile', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
@@ -2095,6 +2247,10 @@ export default function SettingsPage() {
                                 String(profile.business_hours || '').trim() ||
                                 toBusinessHoursRange(businessStartHour, businessEndHour),
                               business_map_url: profile.business_map_url,
+                              appointment_start_hour: Number(profile.appointment_start_hour),
+                              appointment_end_hour: Number(profile.appointment_end_hour),
+                              appointment_slot_minutes: Number(profile.appointment_slot_minutes),
+                              appointment_window_months: Number(profile.appointment_window_months),
                               two_factor_enabled: profile.two_factor_enabled,
                               free_delivery_enabled: profile.free_delivery_enabled,
                               free_delivery_min_amount:
@@ -2140,6 +2296,18 @@ export default function SettingsPage() {
                             free_delivery_product_rules: normalizeFreeDeliveryProductRules(
                               data.data?.free_delivery_product_rules
                             ),
+                            appointment_start_hour: Number.isInteger(data.data?.appointment_start_hour)
+                              ? data.data.appointment_start_hour
+                              : 9,
+                            appointment_end_hour: Number.isInteger(data.data?.appointment_end_hour)
+                              ? data.data.appointment_end_hour
+                              : 20,
+                            appointment_slot_minutes: Number.isInteger(data.data?.appointment_slot_minutes)
+                              ? data.data.appointment_slot_minutes
+                              : 60,
+                            appointment_window_months: Number.isInteger(data.data?.appointment_window_months)
+                              ? data.data.appointment_window_months
+                              : 3,
                           });
                           setWhatsappAutoReconnectEnabled(
                             Boolean(data.data?.whatsapp_auto_reconnect)
